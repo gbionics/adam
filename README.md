@@ -85,17 +85,21 @@ joints_name_list = [
 ]
 
 kinDyn = KinDynComputations(model_path, joints_name_list)
-# choose the representation, if you want to use the body fixed representation
-kinDyn.set_frame_velocity_representation(adam.Representations.BODY_FIXED_REPRESENTATION)
-# or, if you want to use the mixed representation (that is the default)
+# Set velocity representation (3 options available):
+# 1. MIXED_REPRESENTATION (default) - time derivative of position + world-frame angular velocity
 kinDyn.set_frame_velocity_representation(adam.Representations.MIXED_REPRESENTATION)
+# 2. BODY_FIXED_REPRESENTATION - both linear & angular velocity in body frame
+# kinDyn.set_frame_velocity_representation(adam.Representations.BODY_FIXED_REPRESENTATION)
+# 3. INERTIAL_FIXED_REPRESENTATION - world-frame linear & angular velocity
+# kinDyn.set_frame_velocity_representation(adam.Representations.INERTIAL_FIXED_REPRESENTATION)
+
 w_H_b = np.eye(4)
 joints = np.ones(len(joints_name_list))
 M = kinDyn.mass_matrix(w_H_b, joints)
 print(M)
 w_H_f = kinDyn.forward_kinematics('frame_name', w_H_b, joints)
 
-# IMPORTANT! The Jax Interface function execution can be slow! We suggest to jit them.
+# Jax functions could be also jitted! 
 # For example:
 
 def frame_forward_kinematics(w_H_b, joints):
@@ -105,14 +109,10 @@ def frame_forward_kinematics(w_H_b, joints):
 jitted_frame_fk = jit(frame_forward_kinematics)
 w_H_f = jitted_frame_fk(w_H_b, joints)
 
-# In the same way, the functions can be also vmapped
-vmapped_frame_fk = vmap(frame_forward_kinematics, in_axes=(0, 0))
-# which can be also jitted
-jitted_vmapped_frame_fk = jit(vmapped_frame_fk)
-# and called on a batch of data
+# JAX natively supports batching
 joints_batch = jnp.tile(joints, (1024, 1))
 w_H_b_batch = jnp.tile(w_H_b, (1024, 1, 1))
-w_H_f_batch = jitted_vmapped_frame_fk(w_H_b_batch, joints_batch)
+w_H_f_batch = kinDyn.forward_kinematics('frame_name', w_H_b_batch, joints_batch)
 ```
 
 > [!NOTE]
@@ -139,10 +139,14 @@ joints_name_list = [
 ]
 
 kinDyn = KinDynComputations(model_path, joints_name_list)
-# choose the representation you want to use the body fixed representation
-kinDyn.set_frame_velocity_representation(adam.Representations.BODY_FIXED_REPRESENTATION)
-# or, if you want to use the mixed representation (that is the default)
+# Set velocity representation (3 options available):
+# 1. MIXED_REPRESENTATION (default) - time derivative of position + world-frame angular velocity
 kinDyn.set_frame_velocity_representation(adam.Representations.MIXED_REPRESENTATION)
+# 2. BODY_FIXED_REPRESENTATION - both linear & angular velocity in body frame
+# kinDyn.set_frame_velocity_representation(adam.Representations.BODY_FIXED_REPRESENTATION)
+# 3. INERTIAL_FIXED_REPRESENTATION - world-frame linear & angular velocity
+# kinDyn.set_frame_velocity_representation(adam.Representations.INERTIAL_FIXED_REPRESENTATION)
+
 w_H_b = np.eye(4)
 joints = np.ones(len(joints_name_list))
 M = kinDyn.mass_matrix_fun()
