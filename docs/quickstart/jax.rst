@@ -1,26 +1,30 @@
-Jax usage
-=========
+JAX Backend
+===========
 
-The following example shows how to call an instance of the ``adam.jax.KinDynComputations`` class and use it to compute the mass matrix and forward dynamics of a floating-base robot.
+The JAX backend excels at automatic differentiation and batching. Use it for gradient-based optimization and research prototypes.
 
-.. tip::
-    We suggest to ``jax.jit`` the functions as it will make them run faster!
+Key Features
+------------
 
-.. note::
-    When the functions are ``jax.jit``-ed, the first time you run them, it will take a bit longer to execute as they are being compiled by Jax.
+- **JIT Compilation** – First call is slow, subsequent calls are fast
+- **Automatic Differentiation** – Compute gradients, Jacobians, Hessians
+- **Native Batching** – Process batches of configurations
+- **GPU Support** – Runs on GPU with proper JAX installation
+
+Basic Usage
+-----------
 
 .. code-block:: python
 
-    import adam
-    from adam.jax import KinDynComputations
-    import icub_models
     import numpy as np
     import jax.numpy as jnp
-    from jax import jit, vmap
-
-    # if you want to icub-models https://github.com/robotology/icub-models to retrieve the urdf
+    import adam
+    from adam.jax import KinDynComputations
+    from jax import jit, grad
+    import icub_models
+    
+    # Load model
     model_path = icub_models.get_model_file("iCubGazeboV2_5")
-    # The joint list
     joints_name_list = [
         'torso_pitch', 'torso_roll', 'torso_yaw', 'l_shoulder_pitch',
         'l_shoulder_roll', 'l_shoulder_yaw', 'l_elbow', 'r_shoulder_pitch',
@@ -28,33 +32,213 @@ The following example shows how to call an instance of the ``adam.jax.KinDynComp
         'l_hip_yaw', 'l_knee', 'l_ankle_pitch', 'l_ankle_roll', 'r_hip_pitch',
         'r_hip_roll', 'r_hip_yaw', 'r_knee', 'r_ankle_pitch', 'r_ankle_roll'
     ]
-
+    
     kinDyn = KinDynComputations(model_path, joints_name_list)
-    # choose the representation, if you want to use the body fixed representation
-    kinDyn.set_frame_velocity_representation(adam.Representations.BODY_FIXED_REPRESENTATION)
-    # or, if you want to use the mixed representation (that is the default)
     kinDyn.set_frame_velocity_representation(adam.Representations.MIXED_REPRESENTATION)
-    w_H_b = np.eye(4)
-    joints = np.ones(len(joints_name_list))
+    
+    # Define state
+    w_H_b = jnp.eye(4)
+    joints = jnp.ones(len(joints_name_list)) * 0.1
+    
+    # Compute (slow, no compilation)
     M = kinDyn.mass_matrix(w_H_b, joints)
-    print(M)
-    w_H_f = kinDyn.forward_kinematics('frame_name', w_H_b, joints)
+    print(f"Mass matrix shape: {M.shape}")
 
-    # IMPORTANT! The Jax Interface function execution can be slow! We suggest to jit them.
-    # For example:
 
-    def frame_forward_kinematics(w_H_b, joints):
-        # This is needed since str is not a valid JAX type
-        return kinDyn.forward_kinematics('frame_name', w_H_b, joints)
+JIT Compilation
+---------------
 
-    jitted_frame_fk = jit(frame_forward_kinematics)
-    w_H_f = jitted_frame_fk(w_H_b, joints)
+Wrap your functions with ``@jit`` for speed:
 
-    # In the same way, the functions can be also vmapped
-    vmapped_frame_fk = vmap(frame_forward_kinematics, in_axes=(0, 0))
-    # which can be also jitted
-    jitted_vmapped_frame_fk = jit(vmapped_frame_fk)
-    # and called on a batch of data
-    joints_batch = jnp.tile(joints, (1024, 1))
-    w_H_b_batch = jnp.tile(w_H_b, (1024, 1, 1))
-    w_H_f_batch = jitted_vmapped_frame_fk(w_H_b_batch, joints_batch)
+.. code-block:: python
+
+    from jax import jit
+    
+    @jit
+    def compute(w_H_b, joints):
+        M = kinDyn.mass_matrix(w_H_b, joints)
+        J = kinDyn.jacobian('l_sole', w_H_b, joints)
+        return M, J
+    
+    # First call: slow (compilation)
+    M, J = compute(w_H_b, joints)
+        
+    # Subsequent calls: fast (cached)
+    M, J = compute(w_H_b, joints)
+
+.. warning::
+
+    Frame names must remain as strings (not traced). Wrap them in a closure:
+
+    .. code-block:: python
+
+        # ✅ Correct
+        def make_fk_fn(frame_name):
+            @jit
+            def fk(w_H_b, joints):
+                return kinDyn.forward_kinematics(frame_name, w_H_b, joints)
+            return fk
+        
+        fk_l_sole = make_fk_fn('l_sole')
+
+Automatic Differentiation
+--------------------------
+
+Compute gradients easily:
+
+.. code-block:: python
+
+    from jax import grad
+    
+    # Gradient of mass matrix trace w.r.t. joint positions
+    def mass_matrix_trace(w_H_b, joints):
+        M = kinDyn.mass_matrix(w_H_b, joints)
+        return jnp.trace(M)
+    
+    grad_fn = grad(mass_matrix_trace, argnums=1)  # Gradient w.r.t. joints
+    grad_joints = grad_fn(w_H_b, joints)
+    print(f"Gradient shape: {grad_joints.shape}")
+
+**Higher-order derivatives:**
+
+.. code-block:: python
+
+    from jax import grad, hessian
+    
+    hess_fn = hessian(mass_matrix_trace, argnums=1)
+    hess_joints = hess_fn(w_H_b, joints)
+    print(f"Hessian shape: {hess_joints.shape}")
+
+
+Native Batching
+----------------
+
+JAX automatically broadcasts batched operations:
+
+.. code-block:: python
+
+    # Batch size 1024
+    batch_size = 1024
+    w_H_b_batch = jnp.tile(jnp.eye(4), (batch_size, 1, 1))  # Shape: (1024, 4, 4)
+    joints_batch = jnp.tile(joints, (batch_size, 1))  # Shape: (1024, n_dof)
+    
+    # Just pass batched tensors - JAX handles batching automatically
+    M_batch = kinDyn.mass_matrix(w_H_b_batch, joints_batch)  # Shape: (1024, 6+n, 6+n)
+    J_batch = kinDyn.jacobian('l_sole', w_H_b_batch, joints_batch)  # Shape: (1024, 6, 6+n)
+    print(f"Mass matrix shape: {M_batch.shape}")
+
+**Combine JIT with Native Batching:**
+
+.. code-block:: python
+
+    # JIT for maximum speed
+    @jit
+    def jit_batched_compute(w_H_b_batch, joints_batch):
+        M = kinDyn.mass_matrix(w_H_b_batch, joints_batch)
+        J = kinDyn.jacobian('l_sole', w_H_b_batch, joints_batch)
+        return M, J
+    
+    # First call compiles, subsequent calls are fast
+    M_batch, J_batch = jit_batched_compute(w_H_b_batch, joints_batch)
+
+
+Optimization Example
+--------------------
+
+Use gradients for optimization:
+
+.. code-block:: python
+
+    import optax  # pip install optax
+    from jax import grad, jit
+    
+    def objective(joints):
+        """Minimize mass matrix trace"""
+        M = kinDyn.mass_matrix(w_H_b, joints)
+        return jnp.trace(M)
+    
+    # Setup optimizer
+    optimizer = optax.adam(learning_rate=0.01)
+    opt_state = optimizer.init(joints)
+    
+    # JIT the step
+    @jit
+    def step(joints, opt_state):
+        loss, grads = jax.value_and_grad(objective)(joints)
+        updates, opt_state = optimizer.update(grads, opt_state)
+        joints = optax.apply_updates(joints, updates)
+        return joints, opt_state, loss
+    
+    # Optimize
+    for i in range(100):
+        joints, opt_state, loss = step(joints, opt_state)
+        if i % 10 == 0:
+            print(f"Step {i}, Loss: {loss:.6f}")
+
+
+Tips and Tricks
+---------------
+
+**Enable 64-bit precision** (recommended for robustness):
+
+.. code-block:: python
+
+    from jax import config
+    config.update("jax_enable_x64", True)
+
+**Disable JIT temporarily for debugging:**
+
+.. code-block:: python
+
+    from jax import config
+    config.update("jax_disable_jit", True)
+
+Loading from MuJoCo
+-------------------
+
+Load models from MuJoCo and leverage JAX's JIT and autodiff:
+
+.. code-block:: python
+
+    import mujoco
+    from robot_descriptions.loaders.mujoco import load_robot_description
+    from adam.jax import KinDynComputations
+    import jax.numpy as jnp
+    from jax import jit, grad
+    
+    # Load MuJoCo model
+    mj_model = load_robot_description("g1_mj_description")
+    
+    # Create KinDynComputations from MuJoCo model
+    kinDyn = KinDynComputations.from_mujoco_model(mj_model)
+    kinDyn.set_frame_velocity_representation(adam.Representations.MIXED_REPRESENTATION)
+    
+    # Use with JIT and autodiff
+    @jit
+    def compute_mass_trace(w_H_b, joints):
+        M = kinDyn.mass_matrix(w_H_b, joints)
+        return jnp.trace(M)
+    
+    w_H_b = jnp.eye(4)
+    joints = jnp.zeros(kinDyn.NDoF)
+    
+    trace_val = compute_mass_trace(w_H_b, joints)
+    grad_fn = grad(compute_mass_trace, argnums=1)
+    grad_val = grad_fn(w_H_b, joints)
+
+See :doc:`../guides/mujoco` for more details on MuJoCo integration.
+
+When to Use JAX
+---------------
+
+✅ **Good for:**
+- Gradient-based optimization
+- Computing Jacobians and Hessians
+- Processing batches with native batching
+- GPU acceleration
+
+❌ **Not ideal for:**
+- One-off computations (NumPy is faster)
+- Symbolic manipulation (use CasADi)
+
+**See also:** :doc:`../guides/backend_selection`

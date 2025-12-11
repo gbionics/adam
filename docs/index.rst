@@ -4,47 +4,87 @@
    contain the root `toctree` directive.
 
 
-adam
-----
+adam - Rigid-Body Dynamics for Floating-Base Robots
+========================================================
 
 **Automatic Differentiation for rigid-body-dynamics AlgorithMs**
 
-**adam** implements a collection of algorithms for calculating rigid-body dynamics for **floating-base** robots, in mixed and body fixed representations  using:
+**adam** computes rigid-body dynamics for floating-base robots. Choose from multiple backends depending on your use case:
 
-.. create rst list with links to the following libraries
+- 🔥 `JAX <https://github.com/google/jax>`_ – JIT compilation, batched operations, and differentiation with XLA
+- 🎯 `CasADi <https://web.casadi.org/>`_ – Symbolic computation for optimization and control
+- 🔦 `PyTorch <https://github.com/pytorch/pytorch>`_ – GPU acceleration, batched operations and differentiation
+- 🐍 `NumPy <https://numpy.org/>`_ – Simple numerical evaluation
 
-- `Jax <https://github.com/google/jax>`_
-- `CasADi <https://web.casadi.org/>`_
-- `PyTorch <https://github.com/pytorch/pytorch>`_
-- `NumPy <https://numpy.org/>`_
+All backends share the same API and produce numerically consistent results, letting you pick the tool that fits your workflow.
 
+**Model Loading**
+  - URDF files – standard robot description format (see :doc:`quickstart/index`)
+  - MuJoCo models – direct integration with ``MjModel`` objects (see :doc:`guides/mujoco`)
 
-**adam** employs the automatic differentiation capabilities of these frameworks to compute, if needed, gradients, Jacobian, Hessians of rigid-body dynamics quantities. This approach enables the design of optimal control and reinforcement learning strategies in robotics.
+Core Features
+-------------
 
+**Kinematics & Geometry**
+  - Forward kinematics for any frame
+  - Jacobians for any frame
+  - Jacobian time derivatives
 
-**adam** is based on **Roy Featherstone's Rigid Body Dynamics Algorithms**.
+**Dynamics**
+  - Mass matrix computed via Composite Rigid Body Algorithm (CRBA)
+  - Bias forces (Coriolis and centrifugal forces + gravity term) computed via Recursive Newton-Euler Algorithm (RNEA)
+  - Articulated Body Algorithm (ABA)
 
-Examples
---------
+**Centroidal Dynamics**
+  - Centroidal momentum matrix via the Composite Rigid Body Algorithm
+  - Center of mass position and Jacobian
 
-Have a look at the examples `folder in the repository <https://github.com/ami-iit/adam/tree/main/examples>`_!
+**Automatic Differentiation**
+  - Gradients with JAX and PyTorch
+  - Symbolic computation with CasADi
 
+**Advanced Features**
+  - Parametric models for shape/inertia optimization
+  - Inverse kinematics (CasADi)
+  - MuJoCo integration
+  - Batch processing (PyTorch and JAX)
+
+Philosophy
+----------
+
+Built on **Roy Featherstone's Rigid Body Dynamics Algorithms**, adam provides a composable interface across multiple backends. Consistency is guaranteed through extensive testing against `iDynTree <https://github.com/robotology/idyntree>`_.
+
+Resources
+---------
+
+- **Examples**: See the `examples folder <https://github.com/ami-iit/adam/tree/main/examples>`_ for notebooks and scripts
+- **Tests**: The `tests folder <https://github.com/ami-iit/adam/tree/main/tests>`_ contains comprehensive usage patterns
 
 License
 -------
 
-`BSD-3-Clause <https://choosealicense.com/licenses/bsd-3-clause/>`_
+BSD 3-Clause License – `view license <https://choosealicense.com/licenses/bsd-3-clause/>`_
+
 
 
 .. toctree::
    :maxdepth: 2
-   :caption: Getting started:
+   :caption: Getting Started:
 
    installation
    quickstart/index
 
 .. toctree::
    :maxdepth: 2
-   :caption: API:
+   :caption: Guides:
+
+   guides/concepts
+   guides/backend_selection
+   guides/mujoco
+   guides/troubleshooting
+
+.. toctree::
+   :maxdepth: 2
+   :caption: API Reference:
 
    modules/index
