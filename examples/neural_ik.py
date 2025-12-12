@@ -1,30 +1,26 @@
 """
-Neural inverse-kinematics with ADAM (PyTorch backend) on a MuJoCo model.
+Dual-hand neural inverse-kinematics with ADAM (PyTorch backend) on a MuJoCo model.
 
 What this does
 --------------
-- Loads a MuJoCo XML from `robot_descriptions` using ADAM's `from_mujoco_model`.
-- Builds a small residual MLP that maps (current joints, desired EE position) -> joint
-  correction.
-- Uses ADAM's differentiable forward kinematics for the loss; MuJoCo is only used
-  to provide the model/frames (no MuJoCo gradients are needed).
+- Loads a humanoid robot from `robot_descriptions` using ADAM's `from_mujoco_model`.
+- Automatically detects both left and right hand bodies.
+- Trains a small MLP that maps (current joints, desired hand positions) -> joint configuration.
+- Uses ADAM's differentiable forward kinematics for the loss; MuJoCo is only for
+  visualization (no MuJoCo gradients).
 
-This is intentionally self contained and uses synthetic data:
+Training uses synthetic data:
 - Sample random goal configurations within joint limits.
-- Compute the corresponding target end-effector positions via ADAM FK.
-- Train the MLP to predict a joint update that brings a random current
-  configuration to that target.
+- Compute corresponding hand positions via ADAM FK.
+- Train the network to predict joint configurations that reach both target hand positions.
+- Regularization keeps uninvolved joints near zero.
 
 Usage
 -----
     python3 examples/neural_ik.py \\
         --description g1_mj_description \\
-        --target-body auto \\
-        --epochs 200 --batch-size 512
-
-If you want a specific body/frame, pass `--target-body body_name`. Otherwise the
-script heuristically picks a body containing 'hand', 'gripper', then 'foot', or
-falls back to the last body in the model.
+        --epochs 200 --batch-size 512 \\
+        --visualize
 
 Dependencies
 ------------
@@ -83,90 +79,35 @@ def _load_model(description: str) -> mujoco.MjModel:
     return model
 
 
-def _body_names(model: mujoco.MjModel) -> list[str]:
-    return [
+def _detect_hand_bodies(model: mujoco.MjModel) -> list[str]:
+    """Detect left and right hand/wrist bodies for dual-hand IK.
+    
+    Returns list of hand body names [left_hand, right_hand].
+    """
+    body_names = [
         mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, i)
         for i in range(model.nbody)
     ]
-
-
-def _choose_target_body(model: mujoco.MjModel, user_choice: str | None) -> str:
-    if user_choice:
-        return user_choice
-    names = _body_names(model)
-    # Look specifically for left hand/wrist
-    left_hand = next((n for n in names if "left" in n.lower() and ("hand" in n.lower() or "wrist" in n.lower())), None)
+    
+    left_hand = next(
+        (n for n in body_names if "left" in n.lower() and ("hand" in n.lower() or "wrist" in n.lower())),
+        None
+    )
+    right_hand = next(
+        (n for n in body_names if "right" in n.lower() and ("hand" in n.lower() or "wrist" in n.lower())),
+        None
+    )
+    
+    hands = []
     if left_hand:
-        return left_hand
-    # Fallback to any hand
-    for token in ("hand", "gripper", "wrist"):
-        matches = [n for n in names if n and token in n.lower()]
-        if matches:
-            return matches[0]
-    # Fallback: last body name (usually an end link)
-    return names[-1]
-
-
-def _detect_both_hands(model: mujoco.MjModel) -> tuple[str | None, str | None]:
-    """Detect both left and right hand bodies.
+        hands.append(left_hand)
+    if right_hand:
+        hands.append(right_hand)
     
-    Returns (left_hand, right_hand) tuple. Either may be None if not found.
-    """
-    names = _body_names(model)
-    left_hand = next((n for n in names if "left" in n.lower() and ("hand" in n.lower() or "wrist" in n.lower())), None)
-    right_hand = next((n for n in names if "right" in n.lower() and ("hand" in n.lower() or "wrist" in n.lower())), None)
-    return left_hand, right_hand
-
-
-def _detect_extra_targets(model: mujoco.MjModel) -> list[str]:
-    """Detect additional end-effector bodies for multi-target IK.
+    if not hands:
+        raise RuntimeError("Could not detect hand bodies in the model")
     
-    Returns list of body names for: [left_foot, right_foot, left_hand] if found.
-    """
-    body_names = _body_names(model)
-    extra_targets = []
-    
-    # Look for feet
-    left_foot = next((n for n in body_names if "left" in n.lower() and "ankle" in n.lower()), None)
-    right_foot = next((n for n in body_names if "right" in n.lower() and "ankle" in n.lower()), None)
-    if left_foot and right_foot:
-        extra_targets.extend([left_foot, right_foot])
-    
-    # Look for left hand (right hand is typically the main target_body)
-    left_hand = next((n for n in body_names if "left" in n.lower() and "wrist" in n.lower()), None)
-    if left_hand:
-        extra_targets.append(left_hand)
-    
-    return extra_targets
-
-
-def _get_kinematic_chain_joints(model: mujoco.MjModel, target_body_name: str, joint_names: list[str]) -> list[int]:
-    """Get indices of joints in the kinematic chain to target body.
-    
-    Returns list of joint indices (in ADAM order) that affect the target body.
-    """
-    # Find target body ID
-    target_body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, target_body_name)
-    
-    # Traverse from target body up to root, collecting joints
-    chain_joint_names = []
-    current_body_id = target_body_id
-    
-    while current_body_id > 0:  # 0 is world body
-        # Check if this body has a joint
-        for jnt_id in range(model.njnt):
-            if model.jnt_bodyid[jnt_id] == current_body_id:
-                jnt_type = model.jnt_type[jnt_id]
-                if jnt_type != mujoco.mjtJoint.mjJNT_FREE:
-                    jnt_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, jnt_id)
-                    if jnt_name in joint_names:
-                        chain_joint_names.append(jnt_name)
-        
-        # Move to parent body
-        current_body_id = model.body_parentid[current_body_id]
-    
-    # Convert names to indices in ADAM order
-    return [joint_names.index(name) for name in chain_joint_names if name in joint_names]
+    return hands
 
 
 def _joint_permutation(
@@ -255,7 +196,7 @@ class ResidualIK(torch.nn.Module):
 
 def train_neural_ik(
     kd: KinDynComputationsBatch,
-    target_body: str,
+    target_bodies: list[str],
     limits: JointLimits,
     permutation: np.ndarray,
     mj_model: mujoco.MjModel,
@@ -264,20 +205,13 @@ def train_neural_ik(
     lr: float = 3e-3,
     seed: int = 0,
     visualize: bool = False,
-    viz_frames: int = 600,
     viz_fps: float = 60.0,
     joint_regularization: float = 0.01,
-    extra_target_bodies: list[str] | None = None,
 ) -> None:
     torch.manual_seed(seed)
     device = limits.lower.device
     dtype = limits.lower.dtype
     n_dof = len(limits.names)
-
-    # Build complete list of target bodies
-    target_bodies = [target_body]
-    if extra_target_bodies:
-        target_bodies.extend(extra_target_bodies)
     n_targets = len(target_bodies)
 
     model = ResidualIK(n_dof=n_dof, n_targets=n_targets).to(device=device, dtype=dtype)
@@ -363,7 +297,6 @@ def train_neural_ik(
             target_bodies=target_bodies,
             limits=limits,
             base=base[:1],
-            frames=viz_frames,
             fps=viz_fps,
         )
 
@@ -376,14 +309,9 @@ def _visualize_solution(
     target_bodies: list[str],
     limits: JointLimits,
     base: torch.Tensor,
-    frames: int,
     fps: float,
 ) -> None:
-    """Visualize iterative IK convergence in a MuJoCo viewer.
-    
-    Args:
-        target_bodies: List of body names to track. First is primary (typically left hand).
-    """
+    """Visualize dual-hand IK convergence in a MuJoCo viewer."""
     try:
         import mujoco.viewer
     except Exception as exc:  # pragma: no cover - optional dependency
@@ -541,12 +469,6 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
         default=DEFAULT_DESCRIPTION,
         help=f"robot_descriptions MuJoCo name (default: {DEFAULT_DESCRIPTION})",
     )
-    parser.add_argument(
-        "--target-body",
-        type=str,
-        default=None,
-        help="Body name for the end-effector. Use 'auto' or leave empty to pick heuristically.",
-    )
     parser.add_argument("--epochs", type=int, default=200, help="Training epochs.")
     parser.add_argument("--batch-size", type=int, default=512, help="Batch size.")
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate.")
@@ -561,13 +483,7 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     parser.add_argument(
         "--visualize",
         action="store_true",
-        help="Launch a MuJoCo viewer after training with one sample.",
-    )
-    parser.add_argument(
-        "--viz-frames",
-        type=int,
-        default=600,
-        help="Number of frames to keep the viewer alive.",
+        help="Launch a MuJoCo viewer after training.",
     )
     parser.add_argument(
         "--viz-fps", type=float, default=60.0, help="Viewer refresh rate."
@@ -586,9 +502,11 @@ def main(argv: Iterable[str] | None = None) -> None:
     dtype = torch.float64 if args.dtype == "float64" else torch.float32
 
     mj_model = _load_model(args.description)
-    target_body = None if args.target_body in (None, "auto", "") else args.target_body
-    target_body = _choose_target_body(mj_model, target_body)
-    print(f"Loaded '{args.description}'. Target body: '{target_body}'.")
+    print(f"Loaded '{args.description}'.")
+
+    # Detect hand bodies for dual-hand IK
+    target_bodies = _detect_hand_bodies(mj_model)
+    print(f"Target bodies: {', '.join(target_bodies)}")
 
     kd = KinDynComputationsBatch.from_mujoco_model(
         mj_model,
@@ -600,22 +518,9 @@ def main(argv: Iterable[str] | None = None) -> None:
     perm, mj_joint_names, adam_joint_names = _joint_permutation(mj_model, kd)
     limits = _joint_limits(mj_model, perm, adam_joint_names, DEFAULT_DEVICE, dtype)
 
-
-
-    # Detect both hands for dual-hand IK
-    left_hand, right_hand = _detect_both_hands(mj_model)
-    
-    # Use left hand as primary, right hand as extra target
-    extra_targets = []
-    if right_hand:
-        extra_targets.append(right_hand)
-    
-    all_targets = [target_body] + extra_targets
-    print(f"\nTraining {len(all_targets)}-target IK for: {', '.join(all_targets)}")
-
     train_neural_ik(
         kd=kd,
-        target_body=target_body,
+        target_bodies=target_bodies,
         limits=limits,
         permutation=perm,
         mj_model=mj_model,
@@ -624,10 +529,8 @@ def main(argv: Iterable[str] | None = None) -> None:
         lr=args.lr,
         seed=args.seed,
         visualize=args.visualize,
-        viz_frames=args.viz_frames,
         viz_fps=args.viz_fps,
         joint_regularization=args.joint_reg,
-        extra_target_bodies=extra_targets if extra_targets else None,
     )
 
 
