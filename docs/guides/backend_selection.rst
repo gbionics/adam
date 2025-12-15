@@ -146,9 +146,9 @@ PyTorch
 .. code-block:: python
 
     import torch
-    from adam.pytorch import KinDynComputationsBatch
+    from adam.pytorch import KinDynComputations
     
-    kinDyn = KinDynComputationsBatch(model_path, joints_list)
+    kinDyn = KinDynComputations(model_path, joints_list)
     
     # Batched computation
     batch_size = 1024
