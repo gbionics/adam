@@ -170,13 +170,6 @@ Accuracy Tolerance
 For your use case:
 
 
-Performance
------------
-
-
-**TODO**
-
-
 Getting Help
 ------------
 
