@@ -204,7 +204,7 @@ Computes the mass matrix and centroidal momentum matrix:
 External Wrenches
 -----------------
 
-When computing dynamics with external forces (e.g., contact forces), pass them as a dictionary:
+When computing system acceleration with external forces (e.g., contact forces), pass them as a dictionary:
 
 .. code-block:: python
 
@@ -213,9 +213,8 @@ When computing dynamics with external forces (e.g., contact forces), pass them a
         'r_sole': np.array([fx, fy, fz, mx, my, mz]),  # Contact force at right foot
     }
     
-    tau = kinDyn.inverse_dynamics(
-        w_H_b, joints,
-        base_acc, joints_acc,
+    acc = kinDyn.aba(
+        w_H_b, joints, base_vel, joints_vel, tau,
         external_wrenches=external_wrenches
     )
 
