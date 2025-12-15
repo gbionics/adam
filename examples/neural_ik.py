@@ -341,7 +341,7 @@ def _visualize_solution(
             while viewer.is_running():
                 # Update targets with small circular motion for debugging
                 t = (ik_step / 100.0) * 2 * np.pi  # One full circle per 100 frames
-                radius = 0.25  # Small 5cm radius for debugging
+                radius = 0.25
 
                 # Generate small circular motions around end-effector positions
                 # Target order: [right_hand, left_foot, right_foot, left_hand]
