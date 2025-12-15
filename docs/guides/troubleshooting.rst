@@ -91,7 +91,7 @@ PyTorch Batch: Wrong Shapes
 
 **Problem:** Batched operations fail with shape errors.
 
-**Cause:** ``KinDynComputationsBatch`` expects batch dimension first.
+**Cause:** The unified ``KinDynComputations`` API expects batch dimension first for batched operations.
 
 **Solution:** Shape inputs as ``(batch_size, ...)``:
 

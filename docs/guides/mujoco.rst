@@ -174,7 +174,8 @@ Remember to set the gravity vector consistently between MuJoCo and adam:
 Testing with MuJoCo Models
 ---------------------------
 
-The test suite includes MuJoCo-specific tests in ``tests/test_mujoco.py`` that verify that quantities computed in adam and in mujoco correspond, given the velocity representation differences (see above).
+The test suite includes MuJoCo-specific tests in ``tests/test_mujoco.py``.
+These tests verify that quantities computed in adam and in mujoco correspond, given the velocity representation differences (see above).
 See Also
 --------
 
