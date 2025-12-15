@@ -86,7 +86,7 @@ joints_name_list = [
 
 kinDyn = KinDynComputations(model_path, joints_name_list)
 # Set velocity representation (3 options available):
-# 1. MIXED_REPRESENTATION (default) - time derivative of position + world-frame angular velocity
+# 1. MIXED_REPRESENTATION (default) - time derivative of base origin position (expressed in world frame) + world-frame angular velocity
 kinDyn.set_frame_velocity_representation(adam.Representations.MIXED_REPRESENTATION)
 # 2. BODY_FIXED_REPRESENTATION - both linear & angular velocity in body frame
 # kinDyn.set_frame_velocity_representation(adam.Representations.BODY_FIXED_REPRESENTATION)
@@ -99,7 +99,7 @@ M = kinDyn.mass_matrix(w_H_b, joints)
 print(M)
 w_H_f = kinDyn.forward_kinematics('frame_name', w_H_b, joints)
 
-# Jax functions could be also jitted! 
+# JAX functions can also be jitted!
 # For example:
 
 def frame_forward_kinematics(w_H_b, joints):
