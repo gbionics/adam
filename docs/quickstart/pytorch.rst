@@ -134,10 +134,11 @@ Integration with neural networks:
     policy = ControlPolicy(len(joints_name_list))
     action = policy(joints)
     
-    # Compute dynamics with action
-    M = kinDyn.mass_matrix(w_H_b, joints)
-    tau = kinDyn.inverse_dynamics(w_H_b, joints, base_vel, joints_vel, base_acc, joints_acc)
-
+    # Compute acc
+    acc = kinDyn.aba(
+        w_H_b, joints, base_vel, 
+        joints_vel, action
+    )
 
 Batch Processing
 ----------------
@@ -145,7 +146,7 @@ Batch Processing
 Use ``pytorch.KinDynComputations`` to process multiple configurations. 
 
 .. note:: There is a class ``pytorch.KinDynComputationsBatch`` that has the functionality of ``pytorch.KinDynComputations``. 
-    It exist to avoid API changes in existing code. New users should prefer ``pytorch.KinDynComputations`` for both single and batched computations.
+    It exists to avoid API changes in existing code. New users should prefer ``pytorch.KinDynComputations`` for both single and batched computations.
 
 .. code-block:: python
 
@@ -205,7 +206,7 @@ Batch Use Cases
     trajectory_configs = torch.randn(trajectory_length, n_dof)
     
     # Compute Jacobians for all configurations
-    J_trajectory = kinDyn_batch.jacobian('l_sole', w_H_b_batch, trajectory_configs)
+    J_trajectory = kinDyn.jacobian('l_sole', w_H_b_batch, trajectory_configs)
 
 **Simulation Rollouts**
 
@@ -217,7 +218,7 @@ Batch Use Cases
     
     for step in range(trajectory_steps):
         # Compute dynamics for all parallel simulations
-        M_batch = kinDyn_batch.mass_matrix(w_H_b_batch, joints_batch)
+        M_batch = kinDyn.mass_matrix(w_H_b_batch, joints_batch)
         # Update joints...
 
 
@@ -317,7 +318,7 @@ When to Use PyTorch
 - GPU computation
 - Learning-based control
 - ML pipeline integration
-- Large scale batch
+- Large-scale batch
 - Gradient-based optimization
 
 ❌ **Not ideal for:**
