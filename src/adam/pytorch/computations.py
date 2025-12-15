@@ -26,7 +26,7 @@ class KinDynComputations(KinDynFactoryMixin):
         ),
         dtype: torch.dtype = torch.float32,
         root_link: str = None,
-        gravity: torch.Tensor = torch.as_tensor([0, 0, -9.80665, 0, 0, 0]),
+        gravity: torch.Tensor = torch.tensor([0, 0, -9.80665, 0, 0, 0]),
     ) -> None:
         """
         Args:
