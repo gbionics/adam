@@ -81,32 +81,41 @@ def _load_model(description: str) -> mujoco.MjModel:
 
 def _detect_hand_bodies(model: mujoco.MjModel) -> list[str]:
     """Detect left and right hand/wrist bodies for dual-hand IK.
-    
+
     Returns list of hand body names [left_hand, right_hand].
     """
     body_names = [
         mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, i)
         for i in range(model.nbody)
     ]
-    
+    print("All body names:", body_names)
+
     left_hand = next(
-        (n for n in body_names if "left" in n.lower() and ("hand" in n.lower() or "wrist" in n.lower())),
-        None
+        (
+            n
+            for n in body_names
+            if "left" in n.lower() and ("hand" in n.lower() or "wrist" in n.lower())
+        ),
+        None,
     )
     right_hand = next(
-        (n for n in body_names if "right" in n.lower() and ("hand" in n.lower() or "wrist" in n.lower())),
-        None
+        (
+            n
+            for n in body_names
+            if "right" in n.lower() and ("hand" in n.lower() or "wrist" in n.lower())
+        ),
+        None,
     )
-    
+
     hands = []
     if left_hand:
         hands.append(left_hand)
     if right_hand:
         hands.append(right_hand)
-    
+
     if not hands:
         raise RuntimeError("Could not detect hand bodies in the model")
-    
+
     return hands
 
 
@@ -168,7 +177,7 @@ def _sample_joints(
     return limits.lower + (limits.upper - limits.lower) * u
 
 
-class ResidualIK(torch.nn.Module):
+class NeuralIK(torch.nn.Module):
     """Tiny MLP: (q, target_xyz...) -> q_out. Supports multiple targets."""
 
     def __init__(self, n_dof: int, hidden: int = 256, n_targets: int = 1):
@@ -214,7 +223,7 @@ def train_neural_ik(
     n_dof = len(limits.names)
     n_targets = len(target_bodies)
 
-    model = ResidualIK(n_dof=n_dof, n_targets=n_targets).to(device=device, dtype=dtype)
+    model = NeuralIK(n_dof=n_dof, n_targets=n_targets).to(device=device, dtype=dtype)
     opt = torch.optim.Adam(
         model.parameters(), lr=lr, betas=(0.9, 0.999), weight_decay=1e-5
     )
@@ -267,27 +276,6 @@ def train_neural_ik(
                 f"pos_err={total_err:.5f}"
             )
 
-    # Quick sanity check on a single sample
-    with torch.no_grad():
-        q_curr = _sample_joints(limits, 1)
-        q_goal = _sample_joints(limits, 1)
-        goal_positions = []
-        for body in target_bodies:
-            goal_H = kd.forward_kinematics(body, base[:1], q_goal)
-            goal_positions.append(goal_H[:, :3, 3])
-
-        q_pred = model(q_curr, *goal_positions)
-        q_pred = torch.clamp(q_pred, limits.lower, limits.upper)
-
-        errors = []
-        for i, body in enumerate(target_bodies):
-            pred_H = kd.forward_kinematics(body, base[:1], q_pred)
-            pred_pos = pred_H[:, :3, 3]
-            err = torch.linalg.norm(pred_pos - goal_positions[i], dim=1).item()
-            errors.append(err)
-            print(f"Sanity check {body} → position error: {err:.6f} m")
-        print(f"Average error: {np.mean(errors):.6f} m")
-
     if visualize:
         _visualize_solution(
             kd=kd,
@@ -321,7 +309,7 @@ def _visualize_solution(
     with torch.no_grad():
         # Start from zero joint configuration for debugging
         q_curr = torch.zeros_like(limits.lower).unsqueeze(0)
-        
+
         # Generate target positions based on zero configuration
         # This places targets near where end effectors are at zero config
         target_positions = []
@@ -330,8 +318,7 @@ def _visualize_solution(
             target_positions.append(body_fk[:, :3, 3])
 
         # Print initial state
-        print(f"Starting IK convergence visualization from zero configuration.")
-        print(f"Zero config: {q_curr.squeeze().cpu().numpy()[:10]}...")
+        print("Starting IK convergence visualization from zero configuration.")
         print(f"Tracking {len(target_bodies)} targets at end-effector positions:")
         for i, (name, pos) in enumerate(zip(target_bodies, target_positions)):
             print(f"  [{i}] {name}: {pos.squeeze().cpu().numpy()}")
@@ -342,7 +329,9 @@ def _visualize_solution(
     try:
         with mujoco.viewer.launch_passive(mujoco_model, data) as viewer:
             # Convert targets to numpy and store centers for motion
-            target_centers = [pos.squeeze().cpu().numpy().copy() for pos in target_positions]
+            target_centers = [
+                pos.squeeze().cpu().numpy().copy() for pos in target_positions
+            ]
             target_np = [center.copy() for center in target_centers]
 
             # Run continuously until user closes the window
@@ -353,44 +342,52 @@ def _visualize_solution(
                 # Update targets with small circular motion for debugging
                 t = (ik_step / 100.0) * 2 * np.pi  # One full circle per 100 frames
                 radius = 0.25  # Small 5cm radius for debugging
-                
+
                 # Generate small circular motions around end-effector positions
                 # Target order: [right_hand, left_foot, right_foot, left_hand]
                 for i, body_name in enumerate(target_bodies):
                     # Phase shift to desynchronize motions
                     phase = t + (i * np.pi / 2)
-                    
+
                     # Small vertical circle motion
-                    target_np[i] = np.array([
-                        0.3,
-                        0.0 + radius * np.cos(phase),
-                        0.2 + radius * np.sin(phase)
-                    ])
-                
+                    target_np[i] = np.array(
+                        [
+                            0.3,
+                            0.0 + radius * np.cos(phase),
+                            0.2 + radius * np.sin(phase),
+                        ]
+                    )
+
                 # Convert to tensors for model
                 target_tensors = [
-                    torch.tensor(tnp, dtype=limits.lower.dtype, device=limits.lower.device).unsqueeze(0)
+                    torch.tensor(
+                        tnp, dtype=limits.lower.dtype, device=limits.lower.device
+                    ).unsqueeze(0)
                     for tnp in target_np
                 ]
 
                 # Perform IK iteration to track moving targets
                 with torch.no_grad():
-                    # Compute primary target error for logging
-                    curr_fk = kd.forward_kinematics(target_bodies[0], base, q_curr)
-                    curr_pos = curr_fk[:, :3, 3]
-                    curr_pos_np = curr_pos.squeeze().cpu().numpy()
-                    pos_err = torch.linalg.norm(curr_pos - target_tensors[0], dim=1).item()
 
                     # Apply model multiple times per frame for smooth convergence
                     for _ in range(3):
                         q_pred = model(q_curr, *target_tensors)
                         q_curr = torch.clamp(q_pred, limits.lower, limits.upper)
 
+                    # Compute primary target error for logging
+                    curr_fk = kd.forward_kinematics(target_bodies[0], base, q_curr)
+                    curr_pos = curr_fk[:, :3, 3]
+                    pos_err = torch.linalg.norm(
+                        curr_pos - target_tensors[0], dim=1
+                    ).item()
+
                     # Get current positions for all tracked bodies
                     current_positions_np = []
                     for body_name in target_bodies:
                         body_fk = kd.forward_kinematics(body_name, base, q_curr)
-                        current_positions_np.append(body_fk[:, :3, 3].squeeze().cpu().numpy())
+                        current_positions_np.append(
+                            body_fk[:, :3, 3].squeeze().cpu().numpy()
+                        )
 
                 # Update MuJoCo visualization
                 q_mj = permutation @ q_curr.detach().cpu().numpy().squeeze()
@@ -423,10 +420,10 @@ def _visualize_solution(
                     np.array([0.5, 0.0, 0.5, 0.7]),  # Purple
                     np.array([1.0, 1.0, 0.0, 0.8]),  # Yellow
                 ]
-                
+
                 with viewer.lock():
                     viewer.user_scn.ngeom = len(target_bodies) * 2
-                    
+
                     geom_idx = 0
                     for i in range(len(target_bodies)):
                         # Target sphere (larger, semi-transparent)
@@ -439,7 +436,7 @@ def _visualize_solution(
                             target_colors[i % len(target_colors)],
                         )
                         geom_idx += 1
-                        
+
                         # Current position sphere (smaller, more opaque)
                         mujoco.mjv_initGeom(
                             viewer.user_scn.geoms[geom_idx],
