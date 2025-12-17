@@ -55,7 +55,7 @@ except Exception as exc:  # pragma: no cover - optional dependency
     ) from exc
 
 import adam
-from adam.pytorch import KinDynComputationsBatch
+from adam.pytorch import KinDynComputations
 
 
 DEFAULT_DESCRIPTION = "g1_mj_description"
@@ -120,7 +120,7 @@ def _detect_hand_bodies(model: mujoco.MjModel) -> list[str]:
 
 
 def _joint_permutation(
-    model: mujoco.MjModel, kd: KinDynComputationsBatch
+    model: mujoco.MjModel, kd: KinDynComputations
 ) -> tuple[np.ndarray, list[str], list[str]]:
     mj_joint_names = [
         mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j_id)
@@ -204,7 +204,7 @@ class NeuralIK(torch.nn.Module):
 
 
 def train_neural_ik(
-    kd: KinDynComputationsBatch,
+    kd: KinDynComputations,
     target_bodies: list[str],
     limits: JointLimits,
     permutation: np.ndarray,
@@ -290,7 +290,7 @@ def train_neural_ik(
 
 
 def _visualize_solution(
-    kd: KinDynComputationsBatch,
+    kd: KinDynComputations,
     model: torch.nn.Module,
     mujoco_model: mujoco.MjModel,
     permutation: np.ndarray,
@@ -505,7 +505,7 @@ def main(argv: Iterable[str] | None = None) -> None:
     target_bodies = _detect_hand_bodies(mj_model)
     print(f"Target bodies: {', '.join(target_bodies)}")
 
-    kd = KinDynComputationsBatch.from_mujoco_model(
+    kd = KinDynComputations.from_mujoco_model(
         mj_model,
         device=DEFAULT_DEVICE,
         dtype=dtype,
