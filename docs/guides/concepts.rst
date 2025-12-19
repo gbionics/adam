@@ -47,7 +47,7 @@ Expressed as ``Representations.MIXED_REPRESENTATION`` (default in adam and iDynT
 
 .. math::
 
-    {}^{A[B]}\mathrm{v}_{A,B} = \begin{bmatrix} {}^{A}v_{o_B} \\ {}^{A}\omega_{A,B} \end{bmatrix} = \begin{bmatrix} {}^{A}\dot{o}_{B} \\ (\dot{{}^{A}R_{B}} {}^{A}R_{B}^{-1})^{\vee} \end{bmatrix}
+    {}^{A[B]}\mathrm{v}_{A,B} = \begin{bmatrix} {}^{A}\dot{o}_{B} \\ {}^{A}\omega_{A,B} \end{bmatrix} = \begin{bmatrix} {}^{A}\dot{o}_{B} \\ (\dot{{}^{A}R_{B}} {}^{A}R_{B}^{\top})^{\vee} \end{bmatrix}
 
 Linear velocity is the time derivative of the base origin position (expressed in world frame :math:`A`), and angular velocity is expressed in the **world frame**.
 This hybrid representation is commonly used in humanoid robotics and is the default in adam.
@@ -59,7 +59,7 @@ Expressed as ``Representations.BODY_FIXED_REPRESENTATION``:
 
 .. math::
 
-    {}^{B}\mathrm{v}_{A,B} = \begin{bmatrix} {}^{B}v_{B} \\ {}^{B}\omega_{A,B} \end{bmatrix}
+    {}^{B}\mathrm{v}_{A,B} = \begin{bmatrix} {}^{B}v_{B} \\ {}^{B}\omega_{A,B} \end{bmatrix} = \begin{bmatrix} {}^{B}R_{A} {}^{A}\dot{o}_{B} \\ ({}^{A}R_{B}}^{\top} \dot{{}^{B}R_{A}})^{\vee} \end{bmatrix}   
 
 Both linear and angular velocities are expressed in the **base frame** coordinates.
 This is the "body-fixed" frame representation.
@@ -70,7 +70,7 @@ Expressed as ``Representations.INERTIAL_FIXED_REPRESENTATION``:
 
 .. math::
 
-    {}^{A}\mathrm{v}_{A,B} = \begin{bmatrix} {}^{A}v_{B} \\ {}^{A}\omega_{A,B} \end{bmatrix}
+    {}^{A}\mathrm{v}_{A,B} = \begin{bmatrix} {}^{A}v_{B} \\ {}^{A}\omega_{A,B} \end{bmatrix} = \begin{bmatrix} {}^{A}\dot{o}_{B} - \dot{{}^{A}R_{B}} {}^{A}R_{B}^{\top} {}^{A}o_{B} \\ (\dot{{}^{A}R_{B}} {}^{A}R_{B}^{\top})^{\vee} \end{bmatrix}
 
 Linear velocity is expressed in the **world frame**, angular velocity in the **world frame**.
 This is the "inertial-fixed" frame representation.
