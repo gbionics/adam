@@ -3,22 +3,23 @@ Choosing a Backend
 
 adam supports multiple backends, each optimized for different use cases. This guide helps you choose the right one for your application.
 
-.. Quick Comparison
-.. ----------------
+Quick Comparison
+----------------
 
-.. +-------------+--------+--------+--------+--------+
-.. | Feature     | NumPy  | JAX    | CasADi | PyTorch|
-.. +=============+========+========+========+========+
-.. | **Speed**   | Good   | Excellent | Good   | Excellent |
-.. | **Symbolic**| ❌    | ❌     | ✅    | ❌    |
-.. | **Autodiff**| ❌    | ✅     | ✅    | ✅    |
-.. | **GPU**     | ❌    | ✅     | ❌    | ✅    |
-.. | **Batch**   | Manual | Native | Manual | Native |
-.. | **Learning Curve** | Easy | Medium | Medium | Easy |
-.. +-------------+--------+--------+--------+--------+
++-------------+--------+--------+--------+--------+
+| Feature     | NumPy  | JAX    | CasADi | PyTorch|
++=============+========+========+========+========+
+| **Symbolic**| ❌ No  | ❌ No  | ✅ Yes | ❌ No  |
++-------------+--------+--------+--------+--------+
+| **Autodiff**| ❌ No  | ✅ Yes | ✅ Yes | ✅ Yes |
++-------------+--------+--------+--------+--------+
+| **GPU**     | ❌ No  | ✅ Yes | ❌ No  | ✅ Yes |
++-------------+--------+--------+--------+--------+
+| **Batch**   | 🔧 Manual | 🚀 Native | 🔧 Manual | 🚀 Native |
++-------------+--------+--------+--------+--------+
 
-.. Detailed Breakdown
-.. ------------------
+Detailed Breakdown
+------------------
 
 NumPy
 ^^^^^
