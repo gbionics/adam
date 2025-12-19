@@ -3,24 +3,6 @@ Choosing a Backend
 
 adam supports multiple backends, each optimized for different use cases. This guide helps you choose the right one for your application.
 
-Quick Comparison
-----------------
-
-+-------------+--------+--------+--------+--------+
-| Feature     | NumPy  | JAX    | CasADi | PyTorch|
-+=============+========+========+========+========+
-| **Symbolic**| ❌ No  | ❌ No  | ✅ Yes | ❌ No  |
-+-------------+--------+--------+--------+--------+
-| **Autodiff**| ❌ No  | ✅ Yes | ✅ Yes | ✅ Yes |
-+-------------+--------+--------+--------+--------+
-| **GPU**     | ❌ No  | ✅ Yes | ❌ No  | ✅ Yes |
-+-------------+--------+--------+--------+--------+
-| **Batch**   | 🔧 Manual | 🚀 Native | 🔧 Manual | 🚀 Native |
-+-------------+--------+--------+--------+--------+
-
-Detailed Breakdown
-------------------
-
 NumPy
 ^^^^^
 
