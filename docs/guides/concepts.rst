@@ -59,7 +59,7 @@ Expressed as ``Representations.BODY_FIXED_REPRESENTATION``:
 
 .. math::
 
-    {}^{B}\mathrm{v}_{A,B} = \begin{bmatrix} {}^{B}v_{B} \\ {}^{B}\omega_{A,B} \end{bmatrix} = \begin{bmatrix} {}^{B}R_{A} {}^{A}\dot{o}_{B} \\ ({}^{A}R_{B}}^{\top} \dot{{}^{B}R_{A}})^{\vee} \end{bmatrix}   
+    {}^{B}\mathrm{v}_{A,B} = \begin{bmatrix} {}^{B}v_{B} \\ {}^{B}\omega_{A,B} \end{bmatrix} = \begin{bmatrix} {}^{B}R_{A} {}^{A}\dot{o}_{B} \\ ({}^{A}R_{B}^{\top} \dot{{}^{B}R_{A}})^{\vee} \end{bmatrix}   
 
 Both linear and angular velocities are expressed in the **base frame** coordinates.
 This is the "body-fixed" frame representation.
