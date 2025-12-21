@@ -197,10 +197,15 @@ print(M)
 
 ### PyTorch Batched
 
+Use `pytorch.KinDynComputations` to process also multiple configurations.
+
+> [!NOTE]
+> There is a class pytorch.KinDynComputationsBatch that has the functionality of pytorch.KinDynComputations. It exists to avoid API changes in existing code. New users should prefer pytorch.KinDynComputations for both single and batched computations.
+
 
 ```python
 import adam
-from adam.pytorch import KinDynComputationsBatch
+from adam.pytorch import KinDynComputations
 import icub_models
 
 # if you want to icub-models
@@ -214,7 +219,7 @@ joints_name_list = [
     'r_hip_roll', 'r_hip_yaw', 'r_knee', 'r_ankle_pitch', 'r_ankle_roll'
 ]
 
-kinDyn = KinDynComputationsBatch(model_path, joints_name_list)
+kinDyn = KinDynComputations(model_path, joints_name_list)
 # choose the representation you want to use the body fixed representation
 kinDyn.set_frame_velocity_representation(adam.Representations.BODY_FIXED_REPRESENTATION)
 # or, if you want to use the mixed representation (that is the default)
