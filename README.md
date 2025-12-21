@@ -200,7 +200,7 @@ print(M)
 Use `pytorch.KinDynComputations` to process also multiple configurations.
 
 > [!NOTE]
-> There is a class pytorch.KinDynComputationsBatch that has the functionality of pytorch.KinDynComputations. It exists to avoid API changes in existing code. New users should prefer pytorch.KinDynComputations for both single and batched computations.
+> There is a class `pytorch.KinDynComputationsBatch` that has the functionality of `pytorch.KinDynComputations`. It exists to avoid API changes in existing code. New users should prefer `pytorch.KinDynComputations` for both single and batched computations.
 
 
 ```python
