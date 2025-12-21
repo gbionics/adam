@@ -182,7 +182,7 @@ Computes accelerations given forces:
 
     \ddot{q} = \text{ABA}(q, \nu, \tau, f_{ext})
 
-Used in forward dynamics simulation.
+Used in forward dynamics.
 
 
 **Recursive Newton-Euler Algorithm (RNEA)**
