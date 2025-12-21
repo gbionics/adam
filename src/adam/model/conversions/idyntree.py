@@ -42,8 +42,8 @@ def _to_scalar(x) -> float:
     # Handle CasADi types if available. It should be already a casadi type, but let's be safe
     if isinstance(val, (cs.DM, cs.SX, cs.MX)):
         dm_full = cs.DM(val).full()
-        # Flatten 2D array and extract single scalar
-        val = dm_full[0][0] if isinstance(dm_full, list) else dm_full.flat[0]
+        # `full()` returns a NumPy array; flatten and extract the single scalar
+        val = dm_full.flat[0]
     return float(val)
 
 
