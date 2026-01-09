@@ -17,7 +17,6 @@ NumPy
 
 - Validating robot models
 - Quick experiments
-- Educational purposes
 
 **Example:**
 
