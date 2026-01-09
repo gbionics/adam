@@ -1,192 +1,69 @@
-# adam
+# 🤖 adam
 
 [![adam](https://github.com/ami-iit/adam/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/ami-iit/adam/actions/workflows/tests.yml)
 [![](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](https://github.com/ami-iit/adam/blob/main/LICENSE)
 
-**Automatic Differentiation for rigid-body-dynamics AlgorithMs**
+**Automatic Differentiation for rigid-body-dynamics Algorithms**
 
-**adam** implements a collection of algorithms for calculating rigid-body dynamics for **floating-base** robots, in _mixed_ and _body fixed representations_ (see [Traversaro's A Unified View of the Equations of Motion used for Control Design of Humanoid Robots](https://www.researchgate.net/publication/312200239_A_Unified_View_of_the_Equations_of_Motion_used_for_Control_Design_of_Humanoid_Robots)) using:
+**adam** computes rigid-body dynamics for floating-base robots. Built on Featherstone's algorithms and available across multiple backends:
 
-- [Jax](https://github.com/google/jax)
-- [CasADi](https://web.casadi.org/)
-- [PyTorch](https://github.com/pytorch/pytorch)
-- [NumPy](https://numpy.org/)
+- 🔥 **JAX** – compile, vectorize, and differentiate with XLA
+- 🎯 **CasADi** – symbolic computation for optimization and control
+- 🔦 **PyTorch** – GPU acceleration and batched operations
+- 🐍 **NumPy** – simple numerical evaluation
 
-**adam** employs the **automatic differentiation** capabilities of these frameworks to compute, if needed, gradients, Jacobian, Hessians of rigid-body dynamics quantities. This approach enables the design of optimal control and reinforcement learning strategies in robotics.
+All backends share the same interface and produce numerically consistent results, letting you pick the tool that fits your use case.
 
-**adam** is based on Roy Featherstone's Rigid Body Dynamics Algorithms.
+## 📦 Installation
 
-### Table of contents
-
-- [adam](#adam)
-    - [Table of contents](#table-of-contents)
-  - [🐍 Dependencies](#-dependencies)
-  - [💾 Installation](#-installation)
-    - [🐍 Installation with pip](#-installation-with-pip)
-    - [📦 Installation with conda](#-installation-with-conda)
-      - [Installation from conda-forge package](#installation-from-conda-forge-package)
-    - [🔨 Installation from repo](#-installation-from-repo)
-  - [🚀 Usage](#-usage)
-    - [Jax interface](#jax-interface)
-    - [CasADi interface](#casadi-interface)
-    - [PyTorch interface](#pytorch-interface)
-    - [PyTorch Batched interface](#pytorch-batched-interface)
-    - [MuJoCo interface](#mujoco-interface)
-    - [Inverse Kinematics](#inverse-kinematics)
-  - [🦸‍♂️ Contributing](#️-contributing)
-
-## 🐍 Dependencies
-
-- [`python3`](https://wiki.python.org/moin/BeginnersGuide)
-
-Other requisites are:
-
-- [`urdfdom-py`](https://pypi.org/project/urdfdom-py/) Python package, that exposes the `urdf_parser_py` Python  module
-- `jax`
-- `casadi`
-- `pytorch`
-- `numpy`
-- `array-api-compat`
-
-They will be installed in the installation step!
-
-## 💾 Installation
-
-The installation can be done either using the Python provided by apt (on Debian-based distros) or via conda (on Linux and macOS).
-
-### 🐍 Installation with pip
-
-Install `python3`, if not installed, for example on  **Ubuntu**:
+### With pip
 
 ```bash
-sudo apt install python3 python3-pip python3-venv
+# JAX backend
+pip install adam-robotics[jax]
+
+# CasADi backend
+pip install adam-robotics[casadi]
+
+# PyTorch backend
+pip install adam-robotics[pytorch]
+
+# All backends
+pip install adam-robotics[all]
 ```
 
-Create a [virtual environment](https://docs.python.org/3/library/venv.html#venv-def), if you prefer. For example:
+### With conda
 
 ```bash
-pip install virtualenv
-python3 -m venv your_virtual_env
-source your_virtual_env/bin/activate
+# CasADi backend
+conda create -n adamenv -c conda-forge adam-robotics-casadi
+
+# JAX backend (Linux/macOS only)
+conda create -n adamenv -c conda-forge adam-robotics-jax
+
+# PyTorch backend (Linux/macOS only)
+conda create -n adamenv -c conda-forge adam-robotics-pytorch
+
+# All backends (Linux/macOS only)
+conda create -n adamenv -c conda-forge adam-robotics-all
 ```
 
-Inside the virtual environment, install the library from pip:
-
-- Install **Jax** interface:
-
-  ```bash
-  pip install adam-robotics[jax]
-  ```
-
-- Install **CasADi** interface:
-
-  ```bash
-  pip install adam-robotics[casadi]
-  ```
-
-- Install **PyTorch** interface:
-
-  ```bash
-  pip install adam-robotics[pytorch]
-  ```
-
-- Install **ALL** interfaces:
-
-  ```bash
-  pip install adam-robotics[all]
-  ```
-
-If you want the last version:
-
-```bash
-pip install adam-robotics[selected-interface]@git+https://github.com/ami-iit/adam
-```
-
-or clone the repo and install:
+### From source
 
 ```bash
 git clone https://github.com/ami-iit/adam.git
 cd adam
-pip install .[selected-interface]
+pip install .[jax]  # or [casadi], [pytorch], [all]
 ```
 
-### 📦 Installation with conda
+## 🚀 Quick Start
 
-#### Installation from conda-forge package
+Load a robot model and compute dynamics quantities:
 
-- Install **CasADi** interface:
-
-  ```bash
-  conda create -n adamenv -c conda-forge adam-robotics-casadi
-  ```
-
-- Install **Jax** interface (warning: not available on Windows):
-
-  ```bash
-  conda create -n adamenv -c conda-forge adam-robotics-jax
-  ```
-
-- Install **PyTorch** interface (warning: not available on Windows):
-
-  ```bash
-  conda create -n adamenv -c conda-forge adam-robotics-pytorch
-  ```
-
-- Install **ALL** interfaces (warning: not available on Windows):
-
-  ```bash
-  conda create -n adamenv -c conda-forge adam-robotics-all
-  ```
+### JAX
 
 > [!NOTE]
-> Check also the conda JAX installation guide [here](https://jax.readthedocs.io/en/latest/installation.html#conda-community-supported)
-
-### 🔨 Installation from repo
-
-Install in a conda environment the required dependencies:
-
-- **Jax** interface dependencies:
-
-  ```bash
-  conda create -n adamenv -c conda-forge jax numpy lxml prettytable matplotlib urdfdom-py array-api-compat
-  ```
-
-- **CasADi** interface dependencies:
-
-  ```bash
-  conda create -n adamenv -c conda-forge casadi numpy lxml prettytable matplotlib urdfdom-py array-api-compat
-  ```
-
-- **PyTorch** interface dependencies:
-
-  ```bash
-  conda create -n adamenv -c conda-forge pytorch numpy lxml prettytable matplotlib urdfdom-py array-api-compat
-  ```
-
-- **ALL** interfaces dependencies:
-
-  ```bash
-  conda create -n adamenv -c conda-forge jax casadi pytorch numpy lxml prettytable matplotlib urdfdom-py array-api-compat
-  ```
-
-Activate the environment, clone the repo and install the library:
-
-```bash
-conda activate adamenv
-git clone https://github.com/ami-iit/adam.git
-cd adam
-pip install --no-deps .
-```
-
-## 🚀 Usage
-
-The following are small snippets of the use of **adam**. More examples are arriving!
-Have also a look at the `tests` folder.
-
-### Jax interface
-
-> [!NOTE]
-> Check also the Jax installation guide [here](https://jax.readthedocs.io/en/latest/installation.html#)
+> Check the [JAX installation guide](https://jax.readthedocs.io/en/latest/installation.html)
 
 ```python
 import adam
@@ -208,17 +85,21 @@ joints_name_list = [
 ]
 
 kinDyn = KinDynComputations(model_path, joints_name_list)
-# choose the representation, if you want to use the body fixed representation
-kinDyn.set_frame_velocity_representation(adam.Representations.BODY_FIXED_REPRESENTATION)
-# or, if you want to use the mixed representation (that is the default)
+# Set velocity representation (3 options available):
+# 1. MIXED_REPRESENTATION (default) - time derivative of base origin position (expressed in world frame) + world-frame angular velocity
 kinDyn.set_frame_velocity_representation(adam.Representations.MIXED_REPRESENTATION)
+# 2. BODY_FIXED_REPRESENTATION - both linear & angular velocity in body frame
+# kinDyn.set_frame_velocity_representation(adam.Representations.BODY_FIXED_REPRESENTATION)
+# 3. INERTIAL_FIXED_REPRESENTATION - world-frame linear & angular velocity
+# kinDyn.set_frame_velocity_representation(adam.Representations.INERTIAL_FIXED_REPRESENTATION)
+
 w_H_b = np.eye(4)
 joints = np.ones(len(joints_name_list))
 M = kinDyn.mass_matrix(w_H_b, joints)
 print(M)
 w_H_f = kinDyn.forward_kinematics('frame_name', w_H_b, joints)
 
-# IMPORTANT! The Jax Interface function execution can be slow! We suggest to jit them.
+# JAX functions can also be jitted!
 # For example:
 
 def frame_forward_kinematics(w_H_b, joints):
@@ -228,22 +109,16 @@ def frame_forward_kinematics(w_H_b, joints):
 jitted_frame_fk = jit(frame_forward_kinematics)
 w_H_f = jitted_frame_fk(w_H_b, joints)
 
-# In the same way, the functions can be also vmapped
-vmapped_frame_fk = vmap(frame_forward_kinematics, in_axes=(0, 0))
-# which can be also jitted
-jitted_vmapped_frame_fk = jit(vmapped_frame_fk)
-# and called on a batch of data
+# JAX natively supports batching
 joints_batch = jnp.tile(joints, (1024, 1))
 w_H_b_batch = jnp.tile(w_H_b, (1024, 1, 1))
-w_H_f_batch = jitted_vmapped_frame_fk(w_H_b_batch, joints_batch)
-
-
+w_H_f_batch = kinDyn.forward_kinematics('frame_name', w_H_b_batch, joints_batch)
 ```
 
 > [!NOTE]
 > The first call of the jitted function can be slow, since JAX needs to compile the function. Then it will be faster!
 
-### CasADi interface
+### CasADi
 
 ```python
 import casadi as cs
@@ -264,10 +139,14 @@ joints_name_list = [
 ]
 
 kinDyn = KinDynComputations(model_path, joints_name_list)
-# choose the representation you want to use the body fixed representation
-kinDyn.set_frame_velocity_representation(adam.Representations.BODY_FIXED_REPRESENTATION)
-# or, if you want to use the mixed representation (that is the default)
+# Set velocity representation (3 options available):
+# 1. MIXED_REPRESENTATION (default) - time derivative of position + world-frame angular velocity
 kinDyn.set_frame_velocity_representation(adam.Representations.MIXED_REPRESENTATION)
+# 2. BODY_FIXED_REPRESENTATION - both linear & angular velocity in body frame
+# kinDyn.set_frame_velocity_representation(adam.Representations.BODY_FIXED_REPRESENTATION)
+# 3. INERTIAL_FIXED_REPRESENTATION - world-frame linear & angular velocity
+# kinDyn.set_frame_velocity_representation(adam.Representations.INERTIAL_FIXED_REPRESENTATION)
+
 w_H_b = np.eye(4)
 joints = np.ones(len(joints_name_list))
 M = kinDyn.mass_matrix_fun()
@@ -284,10 +163,9 @@ w_H_b = cs.MX.eye(4)
 joints = cs.MX.sym('joints', len(joints_name_list))
 M = kinDyn.mass_matrix_fun()
 print(M(w_H_b, joints))
-
 ```
 
-### PyTorch interface
+### PyTorch
 
 ```python
 import adam
@@ -317,12 +195,17 @@ M = kinDyn.mass_matrix(w_H_b, joints)
 print(M)
 ```
 
-### PyTorch Batched interface
+### PyTorch Batched
+
+Use `pytorch.KinDynComputations` to process also multiple configurations.
+
+> [!NOTE]
+> There is a class `pytorch.KinDynComputationsBatch` that has the functionality of `pytorch.KinDynComputations`. It exists to avoid API changes in existing code. New users should prefer `pytorch.KinDynComputations` for both single and batched computations.
 
 
 ```python
 import adam
-from adam.pytorch import KinDynComputationsBatch
+from adam.pytorch import KinDynComputations
 import icub_models
 
 # if you want to icub-models
@@ -336,7 +219,7 @@ joints_name_list = [
     'r_hip_roll', 'r_hip_yaw', 'r_knee', 'r_ankle_pitch', 'r_ankle_roll'
 ]
 
-kinDyn = KinDynComputationsBatch(model_path, joints_name_list)
+kinDyn = KinDynComputations(model_path, joints_name_list)
 # choose the representation you want to use the body fixed representation
 kinDyn.set_frame_velocity_representation(adam.Representations.BODY_FIXED_REPRESENTATION)
 # or, if you want to use the mixed representation (that is the default)
@@ -352,7 +235,7 @@ M = kinDyn.mass_matrix(w_H_b_batch, joints_batch)
 w_H_f = kinDyn.forward_kinematics('frame_name', w_H_b_batch, joints_batch)
 ```
 
-### MuJoCo interface
+### MuJoCo
 
 adam supports loading models directly from [MuJoCo](https://mujoco.org/) `MjModel` objects. This is useful when working with MuJoCo simulations or models from [robot_descriptions](https://github.com/robot-descriptions/robot_descriptions.py).
 
@@ -407,12 +290,6 @@ J = kinDyn.jacobian('frame_name', w_H_b, joints)
 
 ### Inverse Kinematics
 
-adam provides an interface for solving inverse kinematics problems using CasADi. The solver supports
-
-- position, orientation, and full pose constraints
-- frame-to-frame constraints (ball, fixed)
-- optional joint limit constraints
-
 ```python
 import casadi as cs
 import numpy as np
@@ -420,36 +297,61 @@ import adam
 from adam.casadi import KinDynComputations
 from adam.casadi.inverse_kinematics import InverseKinematics, TargetType
 
-# Load your robot model
-import icub_models
-model_path = icub_models.get_model_file("iCubGazeboV2_5")
-# The joint list
-joints_name_list = ...
-# Create IK solver
-ik = InverseKinematics(model_path, joints)
-# Add a pose target on a frame (e.g., the left sole)
-ik.add_target("l_sole", target_type=TargetType.POSE, as_soft_constraint=True, weight=1.0)
-ik.add_ball_constraint(frame_1, frame_2, as_soft_constraint=True)
+# Load model
+model_path = ...
+joints_name_list = [...]
 
-# Update the target to a desired pose
+# Create IK solver
+ik = InverseKinematics(model_path, joints_name_list)
+ik.add_target("l_sole", target_type=TargetType.POSE, as_soft_constraint=True, weight=1.0)
+
+# Update target and solve
 desired_position = np.array([0.3, 0.2, 1.0])
 desired_orientation = np.eye(3)
 ik.update_target("l_sole", (desired_position, desired_orientation))
-
-# Solve
 ik.solve()
 
-# Retrieve solution
+# Get solution
 w_H_b_sol, q_sol = ik.get_solution()
 print("Base pose:\n", w_H_b_sol)
 print("Joint values:\n", q_sol)
 ```
 
-## 🦸‍♂️ Contributing
+## 📚 Features
 
-**adam** is an open-source project. Contributions are very welcome!
+- **Kinematics**: Forward kinematics, Jacobians (frame and base)
+- **Dynamics**: Mass matrix, Coriolis/centrifugal forces and gravity, Articulated body algorithm
+- **Centroidal**: Centroidal momentum matrix and derivatives
+- **Differentiation**: Get gradients, Jacobians, and Hessians automatically
+- **Symbolic**: Build computation graphs with CasADi for optimization
+- **Batched**: Process multiple configurations in parallel with PyTorch
 
-Open an issue with your feature request or if you spot a bug. Then, you can also proceed with a Pull-requests! :rocket:
+## 📖 Documentation
+
+See the [full documentation](https://adam-robotics.readthedocs.io/en/latest/) for detailed API reference, more examples, and theory.
+
+## 🧪 Testing
+
+Run tests to verify installation:
+
+```bash
+pip install .[test]  # Install test dependencies
+pytest tests/
+```
+
+See `tests/` folder for comprehensive examples across all backends.
+
+## 🤝 Contributing
+
+Found a bug or have a feature idea? Open an [issue](https://github.com/ami-iit/adam/issues) or submit a [pull request](https://github.com/ami-iit/adam/pulls)! 🚀
 
 > [!WARNING]
-> REPOSITORY UNDER DEVELOPMENT! We cannot guarantee stable API
+> This is a project under active development. API may change.
+
+## 📄 License
+
+BSD 3-Clause License – see [LICENSE](LICENSE) file.
+
+## 🙏 Acknowledgments
+
+Built on [Roy Featherstone's Rigid Body Dynamics Algorithms](https://link.springer.com/book/10.1007/978-1-4899-7560-7) and references like [Traversaro's A Unified View of the Equations of Motion](https://traversaro.github.io/traversaro-phd-thesis/traversaro-phd-thesis.pdf).

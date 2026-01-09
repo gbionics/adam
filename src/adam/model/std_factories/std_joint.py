@@ -45,6 +45,8 @@ class StdJoint(Joint):
         Returns:
             Pose: set the origin
         """
+        if origin is None:
+            return Pose.zero(self.math)
         return Pose.build(xyz=origin.xyz, rpy=origin.rpy, math=self.math)
 
     def _set_limits(self, limit: Limits) -> Limits:

@@ -9,7 +9,7 @@ This module provides the Jax implementation of the Rigid Body Dynamics algorithm
 
 .. tip::
 
-   The functions in this module can be also ``jax.vmap``-ed to run on batches of inputs.
+   The functions in this module natively support batching via broadcasting, or can be explicitly vectorized with ``jax.vmap`` for advanced patterns.
 
 .. note::
 

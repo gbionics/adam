@@ -1,34 +1,56 @@
 Installation
 ============
-This is the installation guide for the project.
 
+adam requires Python 3.10 or later. Install it using your preferred package manager.
 
-Prerequisites
--------------
+Quickstart
+----------
 
-adam requires python 3.7 or later.
-
-
-🐍 Conda installation
----------------------
-
-We suggest to install adam using `conda <https://anaconda.org/>`_:
+Install with your preferred backend(s):
 
 .. code-block:: bash
 
-    conda install adam-robotics -c conda-forge
+    # Single backend
+    pip install adam-robotics[jax]        # JAX backend
+    pip install adam-robotics[casadi]     # CasADi backend
+    pip install adam-robotics[pytorch]    # PyTorch backend
+    
+    # All backends
+    pip install adam-robotics[all]
 
-📦 Pip installation
+Or with conda:
+
+.. code-block:: bash
+
+    conda install -c conda-forge adam-robotics-casadi
+    conda install -c conda-forge adam-robotics-jax
+    conda install -c conda-forge adam-robotics-pytorch
+
+Which Backend?
+--------------
+
+See the :doc:`guides/backend_selection` guide to choose the right backend for your use case.
+
+Development Install
 --------------------
 
-You can also install adam using `pip <https://pypi.org/project/pip/>`_:
+Clone the repository and install in editable mode:
 
 .. code-block:: bash
 
-    pip install adam-robotics
+    git clone https://github.com/ami-iit/adam.git
+    cd adam
+    pip install -e .[all,test]  # Install all backends + test dependencies
 
-If you want to install all the dependencies install ``adam-robotics[all]``.
+This enables development mode with all backends and testing tools.
 
-.. note::
+GPU Support (JAX & PyTorch)
+---------------------------
 
-    If the GPU support for ``JAX`` is needed, follow the instructions in the `Jax documentation <https://jax.readthedocs.io/en/latest/installation.html#conda-community-supported>`_.
+**JAX with GPU**
+
+Follow the `JAX GPU installation guide <https://jax.readthedocs.io/en/latest/installation.html>`_ for GPU support.
+
+**PyTorch with GPU**
+
+PyTorch is automatically GPU-compatible. Check also `PyTorch installation guide <https://pytorch.org/get-started/locally/>`_.

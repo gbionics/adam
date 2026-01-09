@@ -1,14 +1,18 @@
-Quickstart
-===========
+Quickstart Examples
+===================
 
-This section contains some snippets of code that show how to use the library.
+This section contains practical examples for each backend. Choose based on your use case:
 
-.. _quickstart:
+- **NumPy** – Simple numerical computation, validation
+- **JAX** – Automatic differentiation, GPU, native batching
+- **CasADi** – Symbolic computation, optimization formulation, automatic differentiation
+- **PyTorch** – GPU acceleration, native batching, ML integration, automatic differentiation
 
 .. toctree::
     :maxdepth: 2
 
-    casadi
+    numpy
     jax
+    casadi
     pytorch
-    pytorch_batched
+
