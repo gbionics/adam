@@ -5,7 +5,7 @@
 
 **Automatic Differentiation for rigid-body-dynamics Algorithms**
 
-**adam** computes rigid-body dynamics for floating-base robots. Built on Featherstone's algorithms and available across multiple backends for flexibility:
+**adam** computes rigid-body dynamics for floating-base robots. Built on Featherstone's algorithms and available across multiple backends:
 
 - 🔥 **JAX** – compile, vectorize, and differentiate with XLA
 - 🎯 **CasADi** – symbolic computation for optimization and control
