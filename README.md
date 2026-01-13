@@ -2,6 +2,8 @@
 
 [![adam](https://github.com/ami-iit/adam/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/ami-iit/adam/actions/workflows/tests.yml)
 [![](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](https://github.com/ami-iit/adam/blob/main/LICENSE)
+[![DOI](https://zenodo.org/badge/370610855.svg)](https://doi.org/10.5281/zenodo.18232772)
+
 
 **Automatic Differentiation for rigid-body-dynamics Algorithms**
 
