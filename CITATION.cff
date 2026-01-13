@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "adam"
+type: software
+doi: 10.5281/zenodo.18232773
+url: "https://github.com/gbionics/adam"
+version: "0.5.1"
+date-released: "2026-01-13" 
+authors:
+  - family-names: "L'Erario"
+    given-names: "Giuseppe"
+    orcid: "https://orcid.org/0000-0002-9283-6133"
