@@ -9,4 +9,8 @@ date-released: "2026-01-13"
 authors:
   - family-names: "L'Erario"
     given-names: "Giuseppe"
-    orcid: "https://orcid.org/0000-0002-9283-6133"
+    orcid: "https://orcid.org/0000-0001-6042-3222"
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.18232772
+    description: "Concept DOI (all versions)"
