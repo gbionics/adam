@@ -131,7 +131,5 @@ class StdJoint(Joint):
             return self.math.vertcat(z, z, z, axis[0], axis[1], axis[2])
         elif self.type in ["prismatic"]:
             axis = self.axis
-            zero = self.math.zeros(
-                3,
-            )
-            return self.math.vertcat(axis[0], axis[1], axis[2], zero, zero, zero)
+            z = self.math.zeros(1)
+            return self.math.vertcat(axis[0], axis[1], axis[2], z, z, z)
