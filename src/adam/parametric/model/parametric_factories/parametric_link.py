@@ -46,7 +46,7 @@ class ParametricLink(Link):
         original_volume, _ = self.compute_volume(length_multiplier=1.0)
         self.original_density = link.inertial.mass / original_volume
         self.link_offset = self.compute_offset()
-        (self.volume, self.visual_data_new) = self.compute_volume(
+        self.volume, self.visual_data_new = self.compute_volume(
             length_multiplier=self.length_multiplier
         )
         self.mass = self.compute_mass()

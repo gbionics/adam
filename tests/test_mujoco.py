@@ -7,7 +7,6 @@ from robot_descriptions.loaders.mujoco import load_robot_description
 from adam import Representations
 from adam.numpy.computations import KinDynComputations
 
-
 DESCRIPTION_NAMES = ["g1_mj_description", "aliengo_mj_description"]
 
 
