@@ -57,7 +57,6 @@ except Exception as exc:  # pragma: no cover - optional dependency
 import adam
 from adam.pytorch import KinDynComputations
 
-
 DEFAULT_DESCRIPTION = "g1_mj_description"
 DEFAULT_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
