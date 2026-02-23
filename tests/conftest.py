@@ -67,7 +67,7 @@ def get_robot_model_path(robot_name: str) -> str:
     if robot_name == "StickBot":
         model_path = "stickbot.urdf"
         if not os.path.exists(model_path):
-            url = "https://raw.githubusercontent.com/icub-tech-iit/ergocub-gazebo-simulations/master/models/stickBot/model.urdf"
+            url = "https://raw.githubusercontent.com/icub-tech-iit/ergocub-gazebo-simulations/2a9f2d3849610c5731f925ced54b56a3333d8b0b/models/stickBot/model.urdf"
             response = requests.get(url)
             with open(model_path, "wb") as file:
                 file.write(response.content)
