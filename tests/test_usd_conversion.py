@@ -2,8 +2,6 @@ import numpy as np
 import pytest
 from conftest import RobotCfg, State
 
-pytest.importorskip("pxr")
-
 from adam.model import Model, build_model_factory
 from adam.numpy.computations import KinDynComputations
 from adam.numpy.numpy_like import SpatialMath
