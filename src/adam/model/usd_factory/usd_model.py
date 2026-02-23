@@ -291,9 +291,7 @@ class USDModelFactory(ModelFactory):
             f"Unsupported USD joint type '{prim.GetTypeName()}' at {prim.GetPath()}."
         )
 
-    def _joint_limits(
-        self, joint_schema: Any, joint_type: str
-    ) -> Optional[Limits]:
+    def _joint_limits(self, joint_schema: Any, joint_type: str) -> Optional[Limits]:
         if joint_type == "fixed":
             return None
 
