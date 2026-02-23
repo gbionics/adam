@@ -1,4 +1,5 @@
 import dataclasses
+import pathlib
 
 from adam.model.abc_factories import Joint, Link, ModelFactory
 from adam.model.tree import Tree
@@ -154,3 +155,18 @@ class Model:
                     j += 1
 
         console.print(table)
+
+    def to_usd(
+        self,
+        usd_output_path: str | pathlib.Path,
+        *,
+        robot_prim_path: str = "/Robot",
+    ) -> pathlib.Path:
+        """Export this model to a USD file containing one articulation robot."""
+        from adam.model.conversions.usd import model_to_usd
+
+        return model_to_usd(
+            model=self,
+            usd_output_path=usd_output_path,
+            robot_prim_path=robot_prim_path,
+        )
