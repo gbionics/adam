@@ -5,4 +5,5 @@ from .std_factories.std_joint import StdJoint
 from .std_factories.std_link import StdLink
 from .mj_factory.mujoco_model import MujocoModelFactory
 from .std_factories.std_model import URDFModelFactory
+from .usd_factory.usd_model import USDModelFactory
 from .tree import Node, Tree
