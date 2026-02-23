@@ -81,11 +81,16 @@ def model_to_usd_stage(
 
     stage = Usd.Stage.CreateInMemory() if stage is None else stage
     UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
+    stage.SetMetadata("metersPerUnit", 1.0)
+    stage.SetMetadata("kilogramsPerUnit", 1.0)
 
     robot = UsdGeom.Xform.Define(stage, robot_prim_path)
     robot_prim = robot.GetPrim()
     UsdPhysics.ArticulationRootAPI.Apply(robot_prim)
     stage.SetDefaultPrim(robot_prim)
+
+    # Author assetInfo.name per USD asset structure best practices.
+    robot_prim.SetAssetInfoByKey("name", model.name)
 
     link_paths: dict[str, str] = {}
     all_links = dict(model.links)
@@ -167,8 +172,12 @@ def model_to_usd_stage(
                 and np.isfinite(_to_float(joint.limit.upper))
                 and joint.type == "revolute"
             ):
-                joint_prim.CreateLowerLimitAttr(_to_float(joint.limit.lower))
-                joint_prim.CreateUpperLimitAttr(_to_float(joint.limit.upper))
+                joint_prim.CreateLowerLimitAttr(
+                    np.degrees(_to_float(joint.limit.lower))
+                )
+                joint_prim.CreateUpperLimitAttr(
+                    np.degrees(_to_float(joint.limit.upper))
+                )
         elif joint.type == "prismatic":
             joint_prim = UsdPhysics.PrismaticJoint.Define(stage, joint_path)
             axis = _to_numpy(joint.axis).reshape(-1)
@@ -182,6 +191,7 @@ def model_to_usd_stage(
                 and np.isfinite(_to_float(joint.limit.lower))
                 and np.isfinite(_to_float(joint.limit.upper))
             ):
+                # Prismatic limits are linear (metres) — no angle conversion.
                 joint_prim.CreateLowerLimitAttr(_to_float(joint.limit.lower))
                 joint_prim.CreateUpperLimitAttr(_to_float(joint.limit.upper))
         elif joint.type == "fixed":
