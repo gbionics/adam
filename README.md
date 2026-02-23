@@ -310,7 +310,7 @@ from adam.model import Model, build_model_factory
 from adam.numpy import KinDynComputations
 from adam.numpy.numpy_like import SpatialMath
 
-# Start from a URDF model description
+# You can convert an URDF to an USD
 model_path = "robot.urdf"
 joints_name_list = ["joint_1", "joint_2"]
 
@@ -321,7 +321,7 @@ model = Model.build(factory=factory, joints_name_list=joints_name_list)
 usd_path = "robot.usda"
 model.to_usd(usd_path, robot_prim_path="/Robot")
 
-# Load kinematics/dynamics from USD
+# If you have an existing USD file, start from this to create a KinDynComputations instance
 kinDyn = KinDynComputations.from_usd(
     usd_path,
     robot_prim_path="/Robot",
