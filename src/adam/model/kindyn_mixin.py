@@ -45,3 +45,51 @@ class KinDynFactoryMixin:
             ]
             kwargs.setdefault("joints_name_list", actuator_names)
         return cls(mujoco_model, *args, **kwargs)
+
+    @classmethod
+    def from_usd(
+        cls: type[KinDynFactoryMixin],
+        usd_path: Any,
+        robot_prim_path: str | None = None,
+        *args,
+        **kwargs,
+    ):
+        """Instantiate using an OpenUSD stage path.
+
+        Args:
+            usd_path: USD path/string/pathlib.Path (.usd/.usda/.usdc/.usdz)
+            robot_prim_path (str | None): Optional articulation-root prim path to select a specific robot.
+
+        Returns:
+            KinDynFactoryMixin: An instance initialized from the provided USD description.
+        """
+        description = (
+            {"usd_path": usd_path, "robot_prim_path": robot_prim_path}
+            if robot_prim_path is not None
+            else usd_path
+        )
+        return cls(description, *args, **kwargs)
+
+    @classmethod
+    def from_usd_stage(
+        cls: type[KinDynFactoryMixin],
+        usd_stage: Any,
+        robot_prim_path: str | None = None,
+        *args,
+        **kwargs,
+    ):
+        """Instantiate using an in-memory pxr.Usd.Stage.
+
+        Args:
+            usd_stage: pxr.Usd.Stage instance
+            robot_prim_path (str | None): Optional articulation-root prim path to select a specific robot.
+
+        Returns:
+            KinDynFactoryMixin: An instance initialized from the provided USD stage.
+        """
+        description = (
+            {"usd_stage": usd_stage, "robot_prim_path": robot_prim_path}
+            if robot_prim_path is not None
+            else usd_stage
+        )
+        return cls(description, *args, **kwargs)
