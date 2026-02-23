@@ -46,6 +46,7 @@ test = [
   "casadi",
   "torch",
   "usd-core",
+  "urdf-usd-converter",
   "mujoco",
   "robot_descriptions",
   "pytest",
