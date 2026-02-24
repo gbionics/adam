@@ -1127,7 +1127,7 @@ class RBDAlgorithms:
             return cached_chain
 
         if frame not in self.model.links and frame not in self.model.frames:
-            raise ValueError(f"{frame} is not not in the robot model.")
+            raise ValueError(f"{frame} is not in the robot model.")
 
         chain_reversed: list[Joint] = []
         current = frame
