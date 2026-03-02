@@ -244,9 +244,13 @@ class InverseKinematics:
             # Fixed constraint: child frame must be aligned and positioned with parent frame
             if as_soft_constraint:
                 slack = self.opti.variable(1)
+                # Positional error: squared distance between frame origins
+                pos_err_sq = cs.sumsqr(p_child - p_parent)
                 # Chordal rotation cost: 3 - trace(R_parent^T @ R_child)
                 rot_err_sq = 3 - cs.trace(R_parent.T @ R_child)
-                self.opti.subject_to(rot_err_sq <= slack)
+                # Total fixed-frame error combines position and rotation terms
+                total_err = pos_err_sq + rot_err_sq
+                self.opti.subject_to(total_err <= slack)
                 self.opti.subject_to(self.opti.bounded(0, slack, 1e-3))
                 self.cost_terms.append(cs.sumsqr(slack) * weight)
             else:
