@@ -12,7 +12,7 @@ ROOT_LINK = "root_link"
 # End-effector frames used as IK targets — exist in both iCubGenova04 and StickBot
 IK_TARGET_FRAMES = ["l_hand", "r_hand", "l_ankle_2", "r_ankle_2"]
 
-TOL = 1e-4       # metres / radians  (warm start)
+TOL = 1e-4  # metres / radians  (warm start)
 
 
 def _fk_poses(
@@ -69,7 +69,9 @@ def _build_ik_pose(robot_cfg: RobotCfg) -> InverseKinematics:
 
 
 @pytest.fixture(scope="module")
-def ik_reference(tests_setup) -> tuple[KinDynComputations, RobotCfg, np.ndarray, np.ndarray]:
+def ik_reference(
+    tests_setup,
+) -> tuple[KinDynComputations, RobotCfg, np.ndarray, np.ndarray]:
     """Expose kd, robot_cfg, H_ref and q_ref (clamped to joint limits) from tests_setup."""
     robot_cfg, state = tests_setup
     kd = KinDynComputations(robot_cfg.model_path, robot_cfg.joints_name_list)
