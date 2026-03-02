@@ -244,7 +244,8 @@ class InverseKinematics:
             # Fixed constraint: child frame must be aligned and positioned with parent frame
             if as_soft_constraint:
                 slack = self.opti.variable(1)
-                rot_err_sq = cs.power(1 - (cs.trace(R_parent.T @ R_child) - 1) / 2, 2)
+                # Chordal rotation cost: 3 - trace(R_parent^T @ R_child)
+                rot_err_sq = 3 - cs.trace(R_parent.T @ R_child)
                 self.opti.subject_to(rot_err_sq <= slack)
                 self.opti.subject_to(self.opti.bounded(0, slack, 1e-3))
                 self.cost_terms.append(cs.sumsqr(slack) * weight)
@@ -343,8 +344,9 @@ class InverseKinematics:
             self.base_transform(), self.joint_pos
         )
         R_fk = H_fk[:3, :3]
-        # proxy for rotation error: trace(R) = 1 + 2 * cos(theta), where theta is the angle of rotation
-        rot_err_sq = cs.power(1 - (cs.trace(R_des.T @ R_fk) - 1) / 2, 2)
+        # Chordal rotation cost: 3 - trace(R_des^T @ R_fk)
+        # Equivalent to ||R_des^T @ R_fk - I||_F^2 / 2
+        rot_err_sq = 3 - cs.trace(R_des.T @ R_fk)
 
         if as_soft_constraint:
             self.cost_terms.append(weight * rot_err_sq)
@@ -386,7 +388,9 @@ class InverseKinematics:
         p_fk, R_fk = H_fk[:3, 3], H_fk[:3, :3]
 
         pos_err_sq = cs.sumsqr(p_fk - p_des)
-        rot_err_sq = cs.power(1 - (cs.trace(R_des.T @ R_fk) - 1) / 2, 2)
+        # Chordal rotation cost: 3 - trace(R_des^T @ R_fk)
+        # Equivalent to ||R_des^T @ R_fk - I||_F^2 / 2
+        rot_err_sq = 3 - cs.trace(R_des.T @ R_fk)
 
         if as_soft_constraint:
             self.cost_terms.append(weight * (pos_err_sq + rot_err_sq))
