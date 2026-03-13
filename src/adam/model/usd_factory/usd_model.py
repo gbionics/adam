@@ -64,17 +64,6 @@ def _quat_to_xyzw(q: Any) -> np.ndarray:
     return np.array([imag[0], imag[1], imag[2], q.GetReal()], dtype=float)
 
 
-def _quat_to_rpy(q: Any) -> np.ndarray:
-    quat_xyzw = _quat_to_xyzw(q)
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore",
-            message="Gimbal lock detected.*",
-            category=UserWarning,
-        )
-        return R.from_quat(quat_xyzw).as_euler("xyz")
-
-
 def _vec3_to_np(v: Any) -> np.ndarray:
     return np.array([v[0], v[1], v[2]], dtype=float)
 
@@ -218,20 +207,30 @@ class USDModelFactory(ModelFactory):
             else self.Gf.Quatf(1.0, 0.0, 0.0, 0.0)
         )
 
+        # USD stores principalAxes as the rotation from the link frame to the
+        # principal-inertia frame (R_link_to_principal).  Rotate the diagonal
+        # inertia tensor back into the link frame directly, avoiding any
+        # Euler-angle conversion and the associated gimbal-lock singularity.
+        #
+        #   I_link = R^T @ diag(Ixx, Iyy, Izz) @ R
+        #
+        # where R = R.from_quat(principal_axes) maps link → principal frame.
+        R_principal = R.from_quat(_quat_to_xyzw(principal_axes))
+        R_mat = R_principal.as_matrix()
+        I_diag = np.diag(diagonal_inertia)
+        I_link = R_mat.T @ I_diag @ R_mat
+
         return USDInertial(
             mass=mass,
             inertia=USDInertia(
-                ixx=float(diagonal_inertia[0]),
-                ixy=0.0,
-                ixz=0.0,
-                iyy=float(diagonal_inertia[1]),
-                iyz=0.0,
-                izz=float(diagonal_inertia[2]),
+                ixx=float(I_link[0, 0]),
+                ixy=float(I_link[0, 1]),
+                ixz=float(I_link[0, 2]),
+                iyy=float(I_link[1, 1]),
+                iyz=float(I_link[1, 2]),
+                izz=float(I_link[2, 2]),
             ),
-            origin=USDOrigin(
-                xyz=center_of_mass,
-                rpy=_quat_to_rpy(principal_axes),
-            ),
+            origin=USDOrigin(xyz=center_of_mass, rpy=np.zeros(3)),
         )
 
     def _build_links(self) -> tuple[list[StdLink], dict[str, str]]:
