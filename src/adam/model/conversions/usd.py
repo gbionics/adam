@@ -54,7 +54,8 @@ def _write_joint_axis(joint_prim: Any, axis: np.ndarray, Sdf: Any, Gf: Any) -> N
 
 
 def _inertia_to_principal_axes(I: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    # I is symmetric rotational inertia about CoM in the inertial frame.
+    # I is a symmetric rotational inertia tensor about the CoM, expressed in
+    # the body/link frame of the USD rigid body that will receive principalAxes.
     I_sym = 0.5 * (I + I.T)
     eigvals, eigvecs = np.linalg.eigh(I_sym)
 
@@ -62,9 +63,10 @@ def _inertia_to_principal_axes(I: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     if np.linalg.det(eigvecs) < 0.0:
         eigvecs[:, 0] *= -1.0
 
-    # USD stores principalAxes as the rotation from the body frame to the
-    # principal-inertia frame, i.e. the transpose/inverse of the matrix whose
-    # columns are the principal axes expressed in the body frame.
+    # USD stores principalAxes as the rotation from the body frame in which I
+    # is expressed to the principal-inertia frame, i.e. the transpose/inverse
+    # of the matrix whose columns are the principal axes expressed in the body
+    # frame.
     quat_wxyz = R.from_matrix(eigvecs.T).as_quat(scalar_first=True)
     return eigvals, quat_wxyz
 
