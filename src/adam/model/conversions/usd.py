@@ -48,9 +48,9 @@ def _axis_to_usd_token(axis: np.ndarray, tol: float = 1e-5) -> str:
 def _write_joint_axis(joint_prim: Any, axis: np.ndarray, Sdf: Any, Gf: Any) -> None:
     joint_prim.CreateAxisAttr(_axis_to_usd_token(axis))
     axis_n = axis / np.linalg.norm(axis)
-    joint_prim.GetPrim().CreateAttribute(
-        "adam:axis", Sdf.ValueTypeNames.Float3
-    ).Set(Gf.Vec3f(float(axis_n[0]), float(axis_n[1]), float(axis_n[2])))
+    joint_prim.GetPrim().CreateAttribute("adam:axis", Sdf.ValueTypeNames.Float3).Set(
+        Gf.Vec3f(float(axis_n[0]), float(axis_n[1]), float(axis_n[2]))
+    )
 
 
 def _inertia_to_principal_axes(I: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
