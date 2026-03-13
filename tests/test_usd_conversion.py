@@ -65,3 +65,46 @@ def test_model_to_usd(setup_test):
     com_urdf = kd_urdf.CoM_position(H_base, q)
     com_usd = kd_usd.CoM_position(H_base, q)
     np.testing.assert_allclose(com_usd, com_urdf, atol=1e-5, rtol=1e-5)
+
+
+def test_model_to_usd_preserves_rotated_inertial_frame(tmp_path):
+    urdf = """
+    <robot name="rotated_inertia">
+      <link name="base">
+        <inertial>
+          <origin xyz="0.1 -0.2 0.3" rpy="0.4 -0.3 0.2"/>
+          <mass value="3.5"/>
+          <inertia ixx="0.4" ixy="0.0" ixz="0.0" iyy="0.5" iyz="0.0" izz="0.6"/>
+        </inertial>
+      </link>
+    </robot>
+    """
+
+    math = SpatialMath()
+    model = Model.build(
+        factory=build_model_factory(description=urdf, math=math),
+        joints_name_list=[],
+    )
+
+    usd_path = tmp_path / "rotated_inertia.usda"
+    out = model.to_usd(usd_path, robot_prim_path="/Robot")
+    model_usd = Model.build(
+        factory=build_model_factory(description=out, math=math),
+        joints_name_list=[],
+    )
+
+    original_link = model.links["base"]
+    usd_link = model_usd.links["base"]
+
+    np.testing.assert_allclose(
+        usd_link.inertial.origin.xyz.array,
+        original_link.inertial.origin.xyz.array,
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    np.testing.assert_allclose(
+        usd_link.spatial_inertia().array,
+        original_link.spatial_inertia().array,
+        atol=1e-6,
+        rtol=1e-6,
+    )
