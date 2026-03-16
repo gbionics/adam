@@ -178,7 +178,7 @@ def test_aba(setup_test):
 @pytest.mark.xfail(
     reason=(
         "urdf-usd-converter currently preserves rotated inertial tensors using the "
-        "opposite URDF inertial-axis convention from ADAM for this minimal case"
+        "opposite URDF inertial-axis convention from adam/idyntree for this minimal case"
     ),
     strict=False,
 )
