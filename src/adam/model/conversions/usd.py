@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pathlib
 from typing import Any
-import warnings
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
@@ -20,11 +19,6 @@ def _to_numpy(x: Any) -> np.ndarray:
 
 def _to_float(x: Any) -> float:
     return float(_to_numpy(x).reshape(-1)[0])
-
-
-def _rpy_to_quat_wxyz(rpy: np.ndarray) -> np.ndarray:
-    quat_xyzw = R.from_euler("xyz", rpy).as_quat()
-    return np.array([quat_xyzw[3], quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]])
 
 
 def _axis_to_usd_token(axis: np.ndarray, tol: float = 1e-5) -> str:
@@ -51,8 +45,17 @@ def _axis_to_usd_token(axis: np.ndarray, tol: float = 1e-5) -> str:
     return token if principal >= 0.0 else f"-{token}"
 
 
+def _write_joint_axis(joint_prim: Any, axis: np.ndarray, Sdf: Any, Gf: Any) -> None:
+    joint_prim.CreateAxisAttr(_axis_to_usd_token(axis))
+    axis_n = axis / np.linalg.norm(axis)
+    joint_prim.GetPrim().CreateAttribute("adam:axis", Sdf.ValueTypeNames.Float3).Set(
+        Gf.Vec3f(float(axis_n[0]), float(axis_n[1]), float(axis_n[2]))
+    )
+
+
 def _inertia_to_principal_axes(I: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    # I is symmetric rotational inertia about CoM in the inertial frame.
+    # I is a symmetric rotational inertia tensor about the CoM, expressed in
+    # the body/link frame of the USD rigid body that will receive principalAxes.
     I_sym = 0.5 * (I + I.T)
     eigvals, eigvecs = np.linalg.eigh(I_sym)
 
@@ -60,8 +63,11 @@ def _inertia_to_principal_axes(I: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     if np.linalg.det(eigvecs) < 0.0:
         eigvecs[:, 0] *= -1.0
 
-    quat_xyzw = R.from_matrix(eigvecs).as_quat()
-    quat_wxyz = np.array([quat_xyzw[3], quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]])
+    # USD stores principalAxes as the rotation from the body frame in which I
+    # is expressed to the principal-inertia frame, i.e. the transpose/inverse
+    # of the matrix whose columns are the principal axes expressed in the body
+    # frame.
+    quat_wxyz = R.from_matrix(eigvecs.T).as_quat(scalar_first=True)
     return eigvals, quat_wxyz
 
 
@@ -108,7 +114,7 @@ def model_to_usd_stage(
         mass_api.CreateMassAttr(_to_float(link.inertial.mass))
 
         inertia = link.inertial.inertia
-        I = np.array(
+        I_inertial = np.array(
             [
                 [
                     _to_float(inertia.ixx),
@@ -128,7 +134,14 @@ def model_to_usd_stage(
             ],
             dtype=float,
         )
-        principal_vals, principal_quat = _inertia_to_principal_axes(I)
+        # ADAM stores the rotational inertia in the inertial frame described by
+        # link.inertial.origin, while USD principalAxes is defined from the link
+        # frame. Rotate the tensor into the link frame before diagonalizing it.
+        inertial_rpy = _to_numpy(link.inertial.origin.rpy).reshape(-1)
+        R_link_from_inertial = R.from_euler("xyz", inertial_rpy).as_matrix()
+        I_link = R_link_from_inertial @ I_inertial @ R_link_from_inertial.T
+
+        principal_vals, principal_quat = _inertia_to_principal_axes(I_link)
 
         com_xyz = _to_numpy(link.inertial.origin.xyz).reshape(-1)
         mass_api.CreateCenterOfMassAttr(
@@ -161,11 +174,7 @@ def model_to_usd_stage(
         if joint.type in {"revolute", "continuous"}:
             joint_prim = UsdPhysics.RevoluteJoint.Define(stage, joint_path)
             axis = _to_numpy(joint.axis).reshape(-1)
-            joint_prim.CreateAxisAttr(_axis_to_usd_token(axis))
-            axis_n = axis / np.linalg.norm(axis)
-            joint_prim.GetPrim().CreateAttribute(
-                "adam:axis", Sdf.ValueTypeNames.Float3
-            ).Set(Gf.Vec3f(float(axis_n[0]), float(axis_n[1]), float(axis_n[2])))
+            _write_joint_axis(joint_prim, axis, Sdf, Gf)
             if (
                 joint.limit is not None
                 and np.isfinite(_to_float(joint.limit.lower))
@@ -181,11 +190,7 @@ def model_to_usd_stage(
         elif joint.type == "prismatic":
             joint_prim = UsdPhysics.PrismaticJoint.Define(stage, joint_path)
             axis = _to_numpy(joint.axis).reshape(-1)
-            joint_prim.CreateAxisAttr(_axis_to_usd_token(axis))
-            axis_n = axis / np.linalg.norm(axis)
-            joint_prim.GetPrim().CreateAttribute(
-                "adam:axis", Sdf.ValueTypeNames.Float3
-            ).Set(Gf.Vec3f(float(axis_n[0]), float(axis_n[1]), float(axis_n[2])))
+            _write_joint_axis(joint_prim, axis, Sdf, Gf)
             if (
                 joint.limit is not None
                 and np.isfinite(_to_float(joint.limit.lower))
@@ -204,7 +209,7 @@ def model_to_usd_stage(
 
         xyz = _to_numpy(joint.origin.xyz).reshape(-1)
         rpy = _to_numpy(joint.origin.rpy).reshape(-1)
-        quat_wxyz = _rpy_to_quat_wxyz(rpy)
+        quat_wxyz = R.from_euler("xyz", rpy).as_quat(scalar_first=True)
 
         joint_prim.CreateLocalPos0Attr(
             Gf.Vec3f(float(xyz[0]), float(xyz[1]), float(xyz[2]))

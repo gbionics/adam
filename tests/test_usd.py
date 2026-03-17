@@ -2,8 +2,11 @@ import numpy as np
 import pytest
 from conftest import RobotCfg, State
 
+import idyntree.bindings as idyntree
 import urdf_usd_converter
+from adam.model import Model, build_model_factory
 from adam.numpy import KinDynComputations
+from adam.numpy.numpy_like import SpatialMath
 
 
 @pytest.fixture(scope="module")
@@ -170,3 +173,79 @@ def test_aba(setup_test):
     residual = M @ adam_qdd + h - full_tau - generalized_external_wrenches
 
     assert residual == pytest.approx(0.0, abs=1e-4)
+
+
+@pytest.mark.xfail(
+    reason=(
+        "urdf-usd-converter currently preserves rotated inertial tensors using the "
+        "opposite URDF inertial-axis convention from adam/idyntree for this minimal case"
+    ),
+    strict=False,
+)
+def test_newton_usd_preserves_rotated_inertial_frame(tmp_path):
+    urdf = """
+    <robot name="rotated_inertia">
+      <link name="base">
+        <inertial>
+          <origin xyz="0.1 -0.2 0.3" rpy="0.4 -0.3 0.2"/>
+          <mass value="3.5"/>
+          <inertia ixx="0.4" ixy="0.0" ixz="0.0" iyy="0.5" iyz="0.0" izz="0.6"/>
+        </inertial>
+      </link>
+      <link name="tip"/>
+      <joint name="base_to_tip" type="fixed">
+        <parent link="base"/>
+        <child link="tip"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </joint>
+    </robot>
+    """.strip()
+
+    urdf_path = tmp_path / "rotated_inertia.urdf"
+    urdf_path.write_text(urdf)
+
+    converter = urdf_usd_converter.Converter()
+    asset = converter.convert(str(urdf_path), str(tmp_path / "rotated_inertia"))
+
+    math = SpatialMath()
+    model_urdf = Model.build(
+        factory=build_model_factory(description=str(urdf_path), math=math),
+        joints_name_list=[],
+    )
+    model_usd = Model.build(
+        factory=build_model_factory(description=asset.path, math=math),
+        joints_name_list=[],
+    )
+
+    idyntree_loader = idyntree.ModelLoader()
+    assert idyntree_loader.loadModelFromFile(str(urdf_path))
+    idyntree_model = idyntree_loader.model()
+    idyntree_base = idyntree_model.getLink(idyntree_model.getLinkIndex("base"))
+
+    original_link = model_urdf.links["base"]
+    usd_link = model_usd.links["base"]
+
+    np.testing.assert_allclose(
+        original_link.inertial.origin.xyz.array,
+        idyntree_base.getInertia().getCenterOfMass().toNumPy(),
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    np.testing.assert_allclose(
+        original_link.spatial_inertia().array,
+        idyntree_base.getInertia().asMatrix().toNumPy(),
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    np.testing.assert_allclose(
+        usd_link.inertial.origin.xyz.array,
+        original_link.inertial.origin.xyz.array,
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    np.testing.assert_allclose(
+        usd_link.spatial_inertia().array,
+        original_link.spatial_inertia().array,
+        atol=1e-6,
+        rtol=1e-6,
+    )
