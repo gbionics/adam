@@ -73,6 +73,11 @@ class URDFModelFactory(ModelFactory):
         # See https://github.com/ami-iit/ADAM/issues/59
 
         xml_string_without_sensors_tags = urdf_remove_sensors_tags(xml_string)
+
+        # Add "spherical" to the list of allowed joint types as urdf_parser_py does not natively support it
+        if "spherical" not in urdf_parser_py.urdf.Joint.TYPES:
+            urdf_parser_py.urdf.Joint.TYPES.append("spherical")
+
         self.urdf_desc = urdf_parser_py.urdf.URDF.from_xml_string(
             xml_string_without_sensors_tags
         )

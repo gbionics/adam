@@ -225,9 +225,34 @@ def to_idyntree_model(model: Model) -> idyntree.bindings.Model:
     for node in model.tree:
         for j in node.arcs:
             assert j.name not in model.frames
-            joint = to_idyntree_joint(j, links_map[j.parent], links_map[j.child])
-            joint_index = output.addJoint(j.name, joint)
-            assert output.isValidJointIndex(joint_index)
+            if j.type == "spherical":
+                parent_idx = links_map[j.parent]
+                child_idx = links_map[j.child]
+
+                # Create rest transform from joint origin
+                rest_position = idyntree.bindings.Position.FromPython(
+                    _to_sequence(j.origin.xyz)
+                )
+                rest_rotation = idyntree.bindings.Rotation.RPY(
+                    *_to_sequence(j.origin.rpy)
+                )
+                rest_transform = idyntree.bindings.Transform()
+                rest_transform.setRotation(rest_rotation)
+                rest_transform.setPosition(rest_position)
+
+                # Create SphericalJoint with rest transform
+                spherical_joint = idyntree.bindings.SphericalJoint(rest_transform)
+                spherical_joint.setAttachedLinks(parent_idx, child_idx)
+
+                # Set the joint center at the joint origin (relative to parent link)
+                spherical_joint.setJointCenter(parent_idx, rest_position)
+
+                joint_index = output.addJoint(j.name, spherical_joint)
+                assert output.isValidJointIndex(joint_index)
+            else:
+                joint = to_idyntree_joint(j, links_map[j.parent], links_map[j.child])
+                joint_index = output.addJoint(j.name, joint)
+                assert output.isValidJointIndex(joint_index)
 
     frames_list = [f + "_fixed_joint" for f in model.frames]
     for name in model.joints:
