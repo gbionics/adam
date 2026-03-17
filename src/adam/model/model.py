@@ -75,10 +75,10 @@ class Model:
                     joint.idx = current_pos_idx
                     joint.vel_idx = current_vel_idx
                 else:
-                    joint.idx = tuple(range(current_pos_idx,
-                                            current_pos_idx + dofs))
-                    joint.vel_idx = tuple(range(current_vel_idx,
-                                                current_vel_idx + dofs))
+                    joint.idx = tuple(range(current_pos_idx, current_pos_idx + dofs))
+                    joint.vel_idx = tuple(
+                        range(current_vel_idx, current_vel_idx + dofs)
+                    )
                 current_pos_idx += dofs
                 current_vel_idx += dofs
                 break

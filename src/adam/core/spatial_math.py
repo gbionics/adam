@@ -509,7 +509,7 @@ class SpatialMath:
         R = self.swapaxes(T[..., :3, :3], -1, -2)
         p = self.mxv(-R, T[..., :3, 3])
         return self.spatial_transform(R, p)
-    
+
     def X_spherical_joint(
         self,
         xyz: npt.ArrayLike,
