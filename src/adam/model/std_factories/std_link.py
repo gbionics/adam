@@ -1,21 +1,29 @@
+from typing import Any
+
 import numpy.typing as npt
-import urdf_parser_py.urdf
 
 from adam.core.spatial_math import SpatialMath
 from adam.model import Inertia, Inertial, Link, Pose
+from adam.model.visuals import Visual
 
 
 class StdLink(Link):
     """Standard Link class"""
 
-    def __init__(self, link: urdf_parser_py.urdf.Link, math: SpatialMath):
+    def __init__(
+        self,
+        link: Any,
+        math: SpatialMath,
+        *,
+        visuals: list[Visual] | None = None,
+    ):
         self.math = math
         self.name = link.name
-        self.visuals = link.visuals
+        self.visuals = list(visuals if visuals is not None else link.visuals)
         self.inertial = self._set_inertia(link)
         self.collisions = link.collisions
 
-    def _set_inertia(self, link: urdf_parser_py.urdf.Link) -> npt.ArrayLike:
+    def _set_inertia(self, link: Any) -> npt.ArrayLike:
         """
         Args:
             inertia (npt.ArrayLike): inertia

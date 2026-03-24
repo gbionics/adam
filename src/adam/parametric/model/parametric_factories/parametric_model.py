@@ -3,6 +3,8 @@ import urdf_parser_py.urdf
 from adam.core.spatial_math import SpatialMath
 from adam.model import Joint, Link, ModelFactory, StdJoint, StdLink
 from adam.model.std_factories.std_model import get_xml_string, urdf_remove_sensors_tags
+from adam.model.visuals import normalize_urdf_visual
+from adam.model.std_factories.std_model import URDFModelFactory
 from adam.parametric.model import ParametricJoint, ParametricLink
 
 
@@ -23,6 +25,7 @@ class URDFParametricModelFactory(ModelFactory):
         densities,
     ):
         self.math = math
+        self.resource_roots = URDFModelFactory._infer_resource_roots(path)
         xml_string = get_xml_string(path)
         self.links_name_list = links_name_list
 
@@ -102,7 +105,13 @@ class URDFParametricModelFactory(ModelFactory):
                 self.length_multiplier[index_link],
                 self.densities[index_link],
             )
-        return StdLink(link, self.math)
+        visuals = [
+            normalize_urdf_visual(
+                visual, math=self.math, resource_roots=self.resource_roots
+            )
+            for visual in link.visuals
+        ]
+        return StdLink(link, self.math, visuals=visuals)
 
     def get_element_by_name(self, link_name):
         """
