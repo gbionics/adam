@@ -6,6 +6,10 @@ from typing import Any
 class KinDynFactoryMixin:
     """Shared helpers to instantiate KinDyn* classes from different model sources."""
 
+    @property
+    def model(self):
+        return self.rbdalgos.model
+
     @classmethod
     def from_urdf(cls: type[KinDynFactoryMixin], urdfstring: Any, *args, **kwargs):
         """Instantiate using a URDF path/string.

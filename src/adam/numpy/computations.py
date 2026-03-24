@@ -301,3 +301,16 @@ class KinDynComputations(KinDynFactoryMixin):
             self.g,
             external_wrenches,
         ).array.squeeze()
+
+    def link_poses(
+        self, base_transform: np.ndarray, joint_positions: np.ndarray
+    ) -> dict[str, np.ndarray]:
+        """Return root-to-link transforms for the whole model.
+
+        Args:
+            base_transform (np.ndarray): The homogenous transform from base to world frame
+            joint_positions (np.ndarray): The joints position
+        Returns:
+            dict[str, np.ndarray]: A dictionary mapping link names to their poses as homogenous transformation matrices
+        """
+        return self.rbdalgos.link_poses(base_transform, joint_positions)
