@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import pathlib
 from dataclasses import dataclass
 
@@ -9,9 +8,11 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation as R
 
+from adam.model.abc_factories import Pose
 from adam.model.visuals import EmbeddedMeshVisualGeometry
 from adam.numpy import KinDynComputations
 from adam.visualization import Visualizer
+import adam.visualization.viser as visualization_viser
 
 
 def _build_kindyn(description, joints_name_list=None) -> KinDynComputations:
@@ -48,6 +49,39 @@ def _build_kindyn(description, joints_name_list=None) -> KinDynComputations:
             )
 
     raise TypeError(f"Unsupported test model description: {type(description)!r}")
+
+
+def _as_numpy(value) -> np.ndarray:
+    while hasattr(value, "array"):
+        value = value.array
+    array = np.asarray(value)
+    if array.dtype == object:
+        array = np.vectorize(
+            lambda item: item.array if hasattr(item, "array") else item,
+            otypes=[float],
+        )(array)
+    return np.asarray(array, dtype=float)
+
+
+def _new_usd_test_stage():
+    pytest.importorskip("pxr")
+    from pxr import Gf, Usd, UsdGeom, UsdPhysics
+
+    stage = Usd.Stage.CreateInMemory()
+    UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
+    return stage, Gf, UsdGeom, UsdPhysics
+
+
+def _add_usd_rigid_body(stage, usd_geom, usd_physics, gf, path: str):
+    body = usd_geom.Xform.Define(stage, path)
+    prim = body.GetPrim()
+    usd_physics.RigidBodyAPI.Apply(prim)
+    mass_api = usd_physics.MassAPI.Apply(prim)
+    mass_api.CreateMassAttr(1.0)
+    mass_api.CreateCenterOfMassAttr(gf.Vec3f(0.0, 0.0, 0.0))
+    mass_api.CreateDiagonalInertiaAttr(gf.Vec3f(1.0, 1.0, 1.0))
+    mass_api.CreatePrincipalAxesAttr(gf.Quatf(1.0, 0.0, 0.0, 0.0))
+    return prim
 
 
 @dataclass
@@ -209,14 +243,7 @@ class FakeServer:
 @pytest.fixture
 def fake_viser(monkeypatch):
     fake_module = type("FakeViserModule", (), {"ViserServer": FakeServer})
-    original_import_module = importlib.import_module
-
-    def fake_import_module(name: str, package: str | None = None):
-        if name == "viser":
-            return fake_module
-        return original_import_module(name, package)
-
-    monkeypatch.setattr(importlib, "import_module", fake_import_module)
+    monkeypatch.setattr(visualization_viser, "viser", fake_module)
     return fake_module
 
 
@@ -243,6 +270,7 @@ def test_visualizer_builds_scene_and_updates_link_frames(fake_viser):
     </robot>
     """
     kindyn = _build_kindyn(urdf, joints_name_list=["joint1"])
+    assert isinstance(kindyn.model.links["base"].visuals[0].origin, Pose)
     visualizer = Visualizer(
         world_axes=True,
         ground=True,
@@ -321,8 +349,12 @@ def test_link_poses_matches_per_link_forward_kinematics():
 
     assert tuple(link_poses) == ("base", "link1")
     for link_name in link_poses:
-        assert link_poses[link_name] == pytest.approx(
-            kindyn.forward_kinematics(link_name, base_transform, joint_positions)
+        assert _as_numpy(link_poses[link_name]) == pytest.approx(
+            _as_numpy(
+                kindyn.forward_kinematics(
+                    link_name, base_transform, joint_positions
+                )
+            )
         )
 
 
@@ -506,20 +538,20 @@ def test_visualizer_resolves_package_meshes_from_model_roots(
         )
         faces = np.array([[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]])
 
-    original_import_module = importlib.import_module
-
-    def fake_import_module(name: str, package: str | None = None):
-        if name == "viser":
-            return type("FakeViserModule", (), {"ViserServer": FakeServer})
-        if name == "trimesh":
-            return type(
-                "FakeTrimeshModule",
-                (),
-                {"load": staticmethod(lambda path, force="mesh": FakeMesh())},
-            )
-        return original_import_module(name, package)
-
-    monkeypatch.setattr(importlib, "import_module", fake_import_module)
+    monkeypatch.setattr(
+        visualization_viser,
+        "viser",
+        type("FakeViserModule", (), {"ViserServer": FakeServer}),
+    )
+    monkeypatch.setattr(
+        visualization_viser,
+        "trimesh",
+        type(
+            "FakeTrimeshModule",
+            (),
+            {"load": staticmethod(lambda path, force="mesh": FakeMesh())},
+        ),
+    )
 
     kindyn = _build_kindyn(str(model_path))
     visual_record = kindyn.model.links["base"].visuals[0]
@@ -567,6 +599,8 @@ def test_mujoco_factory_populates_visuals_and_visualizer_renders(fake_viser):
 
     assert len(kindyn.model.links["base"].visuals) == 1
     assert len(kindyn.model.links["link1"].visuals) == 1
+    assert isinstance(kindyn.model.links["base"].visuals[0].origin, Pose)
+    assert isinstance(kindyn.model.links["link1"].visuals[0].origin, Pose)
 
     visualizer = Visualizer()
     visualizer.add_model(kindyn, root_name="/adam")
@@ -576,14 +610,7 @@ def test_mujoco_factory_populates_visuals_and_visualizer_renders(fake_viser):
 
 
 def test_usd_factory_populates_visuals_and_visualizer_renders(fake_viser):
-    pytest.importorskip("pxr")
-    from pxr import Gf, Usd, UsdGeom, UsdPhysics
-
-    def _as_numpy(value) -> np.ndarray:
-        return np.asarray(value.array if hasattr(value, "array") else value, dtype=float)
-
-    stage = Usd.Stage.CreateInMemory()
-    UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
+    stage, Gf, UsdGeom, UsdPhysics = _new_usd_test_stage()
 
     robot = UsdGeom.Xform.Define(stage, "/Robot")
     robot_prim = robot.GetPrim()
@@ -624,6 +651,8 @@ def test_usd_factory_populates_visuals_and_visualizer_renders(fake_viser):
     box_visual = next(visual for visual in visuals if visual.name == "box_visual")
     mesh_visual = next(visual for visual in visuals if visual.name == "mesh_visual")
 
+    assert isinstance(box_visual.origin, Pose)
+    assert isinstance(mesh_visual.origin, Pose)
     assert _as_numpy(box_visual.origin.xyz) == pytest.approx([0.0, 0.0, 0.2])
     assert box_visual.geometry.size == pytest.approx((0.4, 0.4, 0.4))
     assert isinstance(mesh_visual.geometry, EmbeddedMeshVisualGeometry)
@@ -683,16 +712,24 @@ def test_visualizer_renders_compiled_mujoco_meshes_without_trimesh(
         """
     )
 
-    original_import_module = importlib.import_module
-
-    def fake_import_module(name: str, package: str | None = None):
-        if name == "viser":
-            return fake_viser
-        if name == "trimesh":
-            raise AssertionError("MuJoCo compiled meshes should not import trimesh.")
-        return original_import_module(name, package)
-
-    monkeypatch.setattr(importlib, "import_module", fake_import_module)
+    monkeypatch.setattr(visualization_viser, "viser", fake_viser)
+    monkeypatch.setattr(
+        visualization_viser,
+        "trimesh",
+        type(
+            "ForbiddenTrimesh",
+            (),
+            {
+                "load": staticmethod(
+                    lambda *args, **kwargs: (_ for _ in ()).throw(
+                        AssertionError(
+                            "MuJoCo compiled meshes should not import trimesh."
+                        )
+                    )
+                )
+            },
+        ),
+    )
 
     mj_model = mujoco.MjModel.from_xml_path(str(mjcf_path))
     kindyn = _build_kindyn(mj_model)
@@ -764,6 +801,7 @@ def test_mujoco_factory_uses_compiled_mesh_pose_and_skips_collisions(
     assert len(visuals) == 1
 
     visual = visuals[0]
+    assert isinstance(visual.origin, Pose)
     geom_pos = np.asarray(mj_model.geom_pos[0], dtype=float)
     geom_quat = np.asarray(mj_model.geom_quat[0], dtype=float)
     visual_xyz = np.asarray(
@@ -783,15 +821,208 @@ def test_mujoco_factory_uses_compiled_mesh_pose_and_skips_collisions(
     )
 
 
+def test_mujoco_capsule_visuals_render_as_mesh(fake_viser):
+    xml = """
+    <mujoco model="capsule_robot">
+      <worldbody>
+        <body name="base">
+          <geom name="capsule" type="capsule" size="0.1 0.2" rgba="0.3 0.4 0.5 1"/>
+        </body>
+      </worldbody>
+    </mujoco>
+    """
+    mj_model = mujoco.MjModel.from_xml_string(xml)
+    kindyn = _build_kindyn(mj_model)
+
+    visual = kindyn.model.links["base"].visuals[0]
+    assert isinstance(visual.origin, Pose)
+    assert isinstance(visual.geometry, EmbeddedMeshVisualGeometry)
+    assert visual.geometry.vertices.shape[0] > 0
+    assert visual.geometry.faces.shape[0] > 0
+
+    visualizer = Visualizer()
+    visualizer.add_model(kindyn, root_name="/capsule")
+
+    recorded = [(method, name) for method, name, _ in visualizer.server.scene.calls]
+    assert ("add_mesh_simple", "/capsule/base/capsule") in recorded
+    assert ("add_cylinder", "/capsule/base/capsule") not in recorded
+
+
+def test_usd_factory_respects_robot_prim_path_for_root_rigid_body_selection():
+    stage, Gf, UsdGeom, UsdPhysics = _new_usd_test_stage()
+
+    robot_a = UsdGeom.Xform.Define(stage, "/RobotA")
+    robot_a_prim = robot_a.GetPrim()
+    UsdPhysics.ArticulationRootAPI.Apply(robot_a_prim)
+    UsdPhysics.RigidBodyAPI.Apply(robot_a_prim)
+    mass_api = UsdPhysics.MassAPI.Apply(robot_a_prim)
+    mass_api.CreateMassAttr(1.0)
+    mass_api.CreateCenterOfMassAttr(Gf.Vec3f(0.0, 0.0, 0.0))
+    mass_api.CreateDiagonalInertiaAttr(Gf.Vec3f(1.0, 1.0, 1.0))
+    mass_api.CreatePrincipalAxesAttr(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
+    UsdGeom.Cube.Define(stage, "/RobotA/box").CreateSizeAttr(0.2)
+
+    robot_b = UsdGeom.Xform.Define(stage, "/RobotB")
+    robot_b_prim = robot_b.GetPrim()
+    UsdPhysics.ArticulationRootAPI.Apply(robot_b_prim)
+    UsdPhysics.RigidBodyAPI.Apply(robot_b_prim)
+    mass_api = UsdPhysics.MassAPI.Apply(robot_b_prim)
+    mass_api.CreateMassAttr(1.0)
+    mass_api.CreateCenterOfMassAttr(Gf.Vec3f(0.0, 0.0, 0.0))
+    mass_api.CreateDiagonalInertiaAttr(Gf.Vec3f(1.0, 1.0, 1.0))
+    mass_api.CreatePrincipalAxesAttr(Gf.Quatf(1.0, 0.0, 0.0, 0.0))
+    UsdGeom.Cube.Define(stage, "/RobotB/box").CreateSizeAttr(0.2)
+
+    kindyn = KinDynComputations.from_usd_stage(
+        stage, robot_prim_path="/RobotA", joints_name_list=[]
+    )
+
+    assert set(kindyn.model.links) == {"RobotA"}
+
+
+def test_usd_factory_skips_inherited_invisible_visuals():
+    stage, Gf, UsdGeom, UsdPhysics = _new_usd_test_stage()
+
+    robot = UsdGeom.Xform.Define(stage, "/Robot")
+    robot_prim = robot.GetPrim()
+    UsdPhysics.ArticulationRootAPI.Apply(robot_prim)
+    stage.SetDefaultPrim(robot_prim)
+
+    _add_usd_rigid_body(stage, UsdGeom, UsdPhysics, Gf, "/Robot/base")
+    visible_box = UsdGeom.Cube.Define(stage, "/Robot/base/visible_box")
+    visible_box.CreateSizeAttr(0.2)
+
+    hidden_scope = UsdGeom.Xform.Define(stage, "/Robot/base/hidden_scope")
+    UsdGeom.Imageable(hidden_scope.GetPrim()).CreateVisibilityAttr(
+        UsdGeom.Tokens.invisible
+    )
+    hidden_box = UsdGeom.Cube.Define(stage, "/Robot/base/hidden_scope/hidden_box")
+    hidden_box.CreateSizeAttr(0.2)
+
+    kindyn = KinDynComputations.from_usd_stage(stage, joints_name_list=[])
+
+    assert [visual.name for visual in kindyn.model.links["base"].visuals] == [
+        "visible_box"
+    ]
+
+
+def test_usd_factory_imports_capsule_visuals_and_visualizer_renders_mesh(fake_viser):
+    stage, Gf, UsdGeom, UsdPhysics = _new_usd_test_stage()
+
+    robot = UsdGeom.Xform.Define(stage, "/Robot")
+    robot_prim = robot.GetPrim()
+    UsdPhysics.ArticulationRootAPI.Apply(robot_prim)
+    stage.SetDefaultPrim(robot_prim)
+
+    _add_usd_rigid_body(stage, UsdGeom, UsdPhysics, Gf, "/Robot/base")
+    capsule = UsdGeom.Capsule.Define(stage, "/Robot/base/capsule_visual")
+    capsule.CreateRadiusAttr(0.1)
+    capsule.CreateHeightAttr(0.4)
+    capsule.CreateAxisAttr(UsdGeom.Tokens.y)
+    capsule.AddTranslateOp().Set(Gf.Vec3f(0.2, 0.0, 0.3))
+
+    kindyn = KinDynComputations.from_usd_stage(stage, joints_name_list=[])
+    visual = kindyn.model.links["base"].visuals[0]
+
+    assert isinstance(visual.origin, Pose)
+    assert isinstance(visual.geometry, EmbeddedMeshVisualGeometry)
+    assert np.asarray(visual.origin.xyz.array, dtype=float) == pytest.approx(
+        [0.2, 0.0, 0.3]
+    )
+    assert visual.geometry.vertices.shape[0] > 0
+    assert visual.geometry.faces.shape[0] > 0
+
+    visualizer = Visualizer()
+    visualizer.add_model(kindyn, root_name="/usd_capsule")
+
+    recorded = [(method, name) for method, name, _ in visualizer.server.scene.calls]
+    assert ("add_mesh_simple", "/usd_capsule/base/capsule_visual") in recorded
+
+
+def test_usd_factory_imports_instance_proxy_mesh_visuals(fake_viser):
+    stage, Gf, UsdGeom, UsdPhysics = _new_usd_test_stage()
+
+    robot = UsdGeom.Xform.Define(stage, "/Robot")
+    robot_prim = robot.GetPrim()
+    UsdPhysics.ArticulationRootAPI.Apply(robot_prim)
+    stage.SetDefaultPrim(robot_prim)
+
+    _add_usd_rigid_body(stage, UsdGeom, UsdPhysics, Gf, "/Robot/base")
+
+    shared_visual = UsdGeom.Xform.Define(stage, "/visuals/shared_base")
+    shared_visual.AddTranslateOp().Set(Gf.Vec3f(0.1, 0.0, 0.2))
+    shared_mesh = UsdGeom.Mesh.Define(stage, "/visuals/shared_base/mesh")
+    shared_mesh.CreatePointsAttr(
+        [
+            Gf.Vec3f(0.0, 0.0, 0.0),
+            Gf.Vec3f(1.0, 0.0, 0.0),
+            Gf.Vec3f(0.0, 1.0, 0.0),
+        ]
+    )
+    shared_mesh.CreateFaceVertexCountsAttr([3])
+    shared_mesh.CreateFaceVertexIndicesAttr([0, 1, 2])
+
+    visuals_prim = UsdGeom.Xform.Define(stage, "/Robot/base/visuals").GetPrim()
+    visuals_prim.GetReferences().AddInternalReference("/visuals/shared_base")
+    visuals_prim.SetInstanceable(True)
+
+    kindyn = KinDynComputations.from_usd_stage(stage, joints_name_list=[])
+    visual = kindyn.model.links["base"].visuals[0]
+
+    assert isinstance(visual.origin, Pose)
+    assert isinstance(visual.geometry, EmbeddedMeshVisualGeometry)
+    assert np.asarray(visual.origin.xyz.array, dtype=float) == pytest.approx(
+        [0.1, 0.0, 0.2]
+    )
+
+    visualizer = Visualizer()
+    visualizer.add_model(kindyn, root_name="/usd_instance")
+
+    recorded = [(method, name) for method, name, _ in visualizer.server.scene.calls]
+    assert ("add_mesh_simple", "/usd_instance/base/mesh") in recorded
+
+
+def test_visualizer_keeps_duplicate_visual_names_unique(fake_viser):
+    stage, Gf, UsdGeom, UsdPhysics = _new_usd_test_stage()
+
+    robot = UsdGeom.Xform.Define(stage, "/Robot")
+    robot_prim = robot.GetPrim()
+    UsdPhysics.ArticulationRootAPI.Apply(robot_prim)
+    stage.SetDefaultPrim(robot_prim)
+
+    _add_usd_rigid_body(stage, UsdGeom, UsdPhysics, Gf, "/Robot/base")
+
+    for group_name, x_offset in [("group_a", 0.0), ("group_b", 0.2)]:
+        group = UsdGeom.Xform.Define(stage, f"/Robot/base/{group_name}")
+        group.AddTranslateOp().Set(Gf.Vec3f(x_offset, 0.0, 0.0))
+        mesh = UsdGeom.Mesh.Define(stage, f"/Robot/base/{group_name}/mesh")
+        mesh.CreatePointsAttr(
+            [
+                Gf.Vec3f(0.0, 0.0, 0.0),
+                Gf.Vec3f(0.1, 0.0, 0.0),
+                Gf.Vec3f(0.0, 0.1, 0.0),
+            ]
+        )
+        mesh.CreateFaceVertexCountsAttr([3])
+        mesh.CreateFaceVertexIndicesAttr([0, 1, 2])
+
+    kindyn = KinDynComputations.from_usd_stage(stage, joints_name_list=[])
+
+    visualizer = Visualizer()
+    visualizer.add_model(kindyn, root_name="/usd_dups")
+
+    mesh_names = [
+        name
+        for method, name, _ in visualizer.server.scene.calls
+        if method == "add_mesh_simple"
+    ]
+    assert len(mesh_names) == 2
+    assert len(set(mesh_names)) == 2
+    assert mesh_names == ["/usd_dups/base/mesh_0", "/usd_dups/base/mesh_1"]
+
+
 def test_visualizer_raises_clear_error_without_viser(monkeypatch):
-    original_import_module = importlib.import_module
-
-    def fake_import_module(name: str, package: str | None = None):
-        if name == "viser":
-            raise ModuleNotFoundError("No module named 'viser'")
-        return original_import_module(name, package)
-
-    monkeypatch.setattr(importlib, "import_module", fake_import_module)
+    monkeypatch.setattr(visualization_viser, "viser", None)
 
     urdf = """
     <robot name="simple_robot">

@@ -8,7 +8,7 @@ Usage
 
 Dependencies
 ------------
-pip install icub-models viser trimesh usd-core urdf-usd-converter requests
+pip install icub-models viser trimesh usd-core urdf-usd-converter
 """
 
 from __future__ import annotations

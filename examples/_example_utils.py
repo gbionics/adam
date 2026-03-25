@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import pathlib
 
-import requests
-
 
 DEFAULT_STICKBOT_URDF = (
     pathlib.Path(__file__).resolve().parent.parent / "stickbot.urdf"
@@ -16,6 +14,8 @@ STICKBOT_URL = (
 
 
 def resolve_stickbot_path(path: str | pathlib.Path) -> pathlib.Path:
+    import requests
+
     resolved_path = pathlib.Path(path).expanduser().resolve()
     if resolved_path.exists():
         return resolved_path
