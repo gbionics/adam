@@ -19,6 +19,7 @@ from adam.model.visuals import (
     SphereVisualGeometry,
     Visual,
     VisualMaterial,
+    capsule_mesh_geometry,
 )
 
 if TYPE_CHECKING:
@@ -67,9 +68,13 @@ class USDJoint:
     limit: Optional[Limits]
 
 
-def _quat_to_xyzw(q: Any) -> np.ndarray:
+def _quat_to_wxyz(q: Any) -> np.ndarray:
     imag = q.GetImaginary()
-    return np.array([imag[0], imag[1], imag[2], q.GetReal()], dtype=float)
+    return np.array([q.GetReal(), imag[0], imag[1], imag[2]], dtype=float)
+
+
+def _rotation_from_usd_quat(q: Any) -> R:
+    return R.from_quat(_quat_to_wxyz(q), scalar_first=True)
 
 
 def _vec3_to_np(v: Any) -> np.ndarray:
@@ -77,9 +82,9 @@ def _vec3_to_np(v: Any) -> np.ndarray:
 
 
 def _is_identity_quat(q: Any) -> bool:
-    quat_xyzw = _quat_to_xyzw(q)
-    return np.allclose(quat_xyzw, np.array([0.0, 0.0, 0.0, 1.0])) or np.allclose(
-        quat_xyzw, np.array([0.0, 0.0, 0.0, -1.0])
+    quat_wxyz = _quat_to_wxyz(q)
+    return np.allclose(quat_wxyz, np.array([1.0, 0.0, 0.0, 0.0])) or np.allclose(
+        quat_wxyz, np.array([-1.0, 0.0, 0.0, 0.0])
     )
 
 
@@ -225,7 +230,7 @@ class USDModelFactory(ModelFactory):
         #   I_link = R^T @ diag(Ixx, Iyy, Izz) @ R
         #
         # where R = R.from_quat(principal_axes) maps link → principal frame.
-        R_principal = R.from_quat(_quat_to_xyzw(principal_axes))
+        R_principal = _rotation_from_usd_quat(principal_axes)
         R_mat = R_principal.as_matrix()
         I_diag = np.diag(diagonal_inertia)
         I_link = R_mat.T @ I_diag @ R_mat
@@ -273,9 +278,7 @@ class USDModelFactory(ModelFactory):
             if count < 3:
                 continue
             for index in range(1, count - 1):
-                triangles.append(
-                    [int(face[0]), int(face[index]), int(face[index + 1])]
-                )
+                triangles.append([int(face[0]), int(face[index]), int(face[index + 1])])
         return np.asarray(triangles, dtype=np.uint32)
 
     @staticmethod
@@ -332,12 +335,25 @@ class USDModelFactory(ModelFactory):
 
         color = np.asarray([colors[0][0], colors[0][1], colors[0][2]], dtype=float)
         opacity = (
-            float(opacities[0])
-            if opacities is not None and len(opacities) > 0
-            else 1.0
+            float(opacities[0]) if opacities is not None and len(opacities) > 0 else 1.0
         )
         return VisualMaterial(
             rgba=(float(color[0]), float(color[1]), float(color[2]), opacity)
+        )
+
+    def _is_effectively_visible(self, prim: Any) -> bool:
+        imageable = self.UsdGeom.Imageable(prim)
+        if not imageable:
+            return True
+        return imageable.ComputeVisibility() != self.UsdGeom.Tokens.invisible
+
+    def _supported_visual_prim(self, prim: Any) -> bool:
+        return (
+            prim.IsA(self.UsdGeom.Mesh)
+            or prim.IsA(self.UsdGeom.Cube)
+            or prim.IsA(self.UsdGeom.Sphere)
+            or prim.IsA(self.UsdGeom.Cylinder)
+            or prim.IsA(self.UsdGeom.Capsule)
         )
 
     def _should_include_visual_prim(self, link_path: Any, prim: Any) -> bool:
@@ -345,8 +361,7 @@ class USDModelFactory(ModelFactory):
         if prim_path == link_path or not prim_path.HasPrefix(link_path):
             return False
 
-        visibility = self._attr_value(prim.GetAttribute("visibility"))
-        if visibility == "invisible":
+        if not self._is_effectively_visible(prim):
             return False
 
         purpose = self._attr_value(prim.GetAttribute("purpose"))
@@ -361,12 +376,14 @@ class USDModelFactory(ModelFactory):
             ):
                 return False
 
-        return (
-            prim.IsA(self.UsdGeom.Mesh)
-            or prim.IsA(self.UsdGeom.Cube)
-            or prim.IsA(self.UsdGeom.Sphere)
-            or prim.IsA(self.UsdGeom.Cylinder)
-        )
+        return self._supported_visual_prim(prim)
+
+    def _axis_token_spec(self, axis_token: Any) -> tuple[np.ndarray, int, str]:
+        if axis_token == self.UsdGeom.Tokens.x:
+            return np.array([1.0, 0.0, 0.0], dtype=float), 0, "x"
+        if axis_token == self.UsdGeom.Tokens.y:
+            return np.array([0.0, 1.0, 0.0], dtype=float), 1, "y"
+        return np.array([0.0, 0.0, 1.0], dtype=float), 2, "z"
 
     def _relative_transform(self, link_prim: Any, prim: Any) -> np.ndarray:
         world_link = np.asarray(
@@ -382,7 +399,7 @@ class USDModelFactory(ModelFactory):
     def _visual_from_geom_prim(self, link_prim: Any, prim: Any) -> Visual | None:
         relative_transform = self._relative_transform(link_prim, prim)
         origin = self._pose_from_transform(relative_transform)
-        _translation, rotation, scale = self._decompose_transform(relative_transform)
+        translation, rotation, scale = self._decompose_transform(relative_transform)
         material = self._visual_material(prim)
 
         if prim.IsA(self.UsdGeom.Cube):
@@ -401,23 +418,9 @@ class USDModelFactory(ModelFactory):
             cylinder = self.UsdGeom.Cylinder(prim)
             radius = float(cylinder.GetRadiusAttr().Get())
             height = float(cylinder.GetHeightAttr().Get())
-            axis_token = self._attr_value(
-                cylinder.GetAxisAttr(), self.UsdGeom.Tokens.z
-            )
-            axis_map = {
-                self.UsdGeom.Tokens.x: np.array([1.0, 0.0, 0.0], dtype=float),
-                self.UsdGeom.Tokens.y: np.array([0.0, 1.0, 0.0], dtype=float),
-                self.UsdGeom.Tokens.z: np.array([0.0, 0.0, 1.0], dtype=float),
-            }
-            axis_index_map = {
-                self.UsdGeom.Tokens.x: 0,
-                self.UsdGeom.Tokens.y: 1,
-                self.UsdGeom.Tokens.z: 2,
-            }
-            axis_rotation = self._rotation_from_z_to(
-                axis_map.get(axis_token, np.array([0.0, 0.0, 1.0], dtype=float))
-            )
-            origin = self._pose_from_transform(relative_transform.copy())
+            axis_token = self._attr_value(cylinder.GetAxisAttr(), self.UsdGeom.Tokens.z)
+            axis_vector, length_axis, _axis_name = self._axis_token_spec(axis_token)
+            axis_rotation = self._rotation_from_z_to(axis_vector)
             with warnings.catch_warnings():
                 warnings.filterwarnings(
                     "ignore",
@@ -425,16 +428,28 @@ class USDModelFactory(ModelFactory):
                     category=UserWarning,
                 )
                 origin = Pose.build(
-                    origin.xyz,
+                    translation,
                     R.from_matrix(rotation @ axis_rotation).as_euler("xyz"),
                     self.math,
                 )
-            length_axis = axis_index_map.get(axis_token, 2)
             radial_axes = [idx for idx in range(3) if idx != length_axis]
             radial_scale = float(np.max(np.abs(scale[radial_axes])))
             geometry = CylinderVisualGeometry(
                 radius=float(radius * radial_scale),
                 length=float(height * abs(scale[length_axis])),
+            )
+        elif prim.IsA(self.UsdGeom.Capsule):
+            capsule = self.UsdGeom.Capsule(prim)
+            radius = float(capsule.GetRadiusAttr().Get())
+            height = float(capsule.GetHeightAttr().Get())
+            axis_token = self._attr_value(capsule.GetAxisAttr(), self.UsdGeom.Tokens.z)
+            _axis_vector, length_axis, axis_name = self._axis_token_spec(axis_token)
+            radial_axes = [idx for idx in range(3) if idx != length_axis]
+            radial_scale = float(np.max(np.abs(scale[radial_axes])))
+            geometry = capsule_mesh_geometry(
+                radius=float(radius * radial_scale),
+                cylindrical_length=float(height * abs(scale[length_axis])),
+                axis=axis_name,
             )
         elif prim.IsA(self.UsdGeom.Mesh):
             mesh = self.UsdGeom.Mesh(prim)
@@ -470,7 +485,7 @@ class USDModelFactory(ModelFactory):
     def _link_visuals(self, link_prim: Any) -> list[Visual]:
         link_path = link_prim.GetPath()
         visuals: list[Visual] = []
-        for prim in self.stage.TraverseAll():
+        for prim in self.Usd.PrimRange(link_prim, self.Usd.TraverseInstanceProxies()):
             if not self._should_include_visual_prim(link_path, prim):
                 continue
             visual = self._visual_from_geom_prim(link_prim, prim)
@@ -478,29 +493,76 @@ class USDModelFactory(ModelFactory):
                 visuals.append(visual)
         return visuals
 
+    def _joint_connected_rigid_body_paths(
+        self,
+        seed_path: str,
+        candidate_paths: set[str],
+    ) -> set[str]:
+        connected_paths = {seed_path}
+        changed = True
+        while changed:
+            changed = False
+            for prim in self.stage.TraverseAll():
+                if not prim.IsA(self.UsdPhysics.Joint):
+                    continue
+                joint = self.UsdPhysics.Joint(prim)
+                body_paths = set()
+                body0_targets = joint.GetBody0Rel().GetTargets()
+                body1_targets = joint.GetBody1Rel().GetTargets()
+                if body0_targets:
+                    body0_path = str(body0_targets[0])
+                    if body0_path in candidate_paths:
+                        body_paths.add(body0_path)
+                if body1_targets:
+                    body1_path = str(body1_targets[0])
+                    if body1_path in candidate_paths:
+                        body_paths.add(body1_path)
+                if body_paths and body_paths & connected_paths:
+                    new_paths = body_paths - connected_paths
+                    if new_paths:
+                        connected_paths.update(new_paths)
+                        changed = True
+        return connected_paths
+
+    def _discover_rigid_body_prims(self) -> list[Any]:
+        robot_path = self.robot_prim.GetPath()
+        if not self.robot_prim.HasAPI(self.UsdPhysics.RigidBodyAPI):
+            selected_paths = {
+                str(prim.GetPath())
+                for prim in self.stage.TraverseAll()
+                if prim.HasAPI(self.UsdPhysics.RigidBodyAPI)
+                and prim.GetPath().HasPrefix(robot_path)
+            }
+        else:
+            scope_path = robot_path.GetParentPath()
+            candidate_paths = {
+                str(prim.GetPath())
+                for prim in self.stage.TraverseAll()
+                if prim.HasAPI(self.UsdPhysics.RigidBodyAPI)
+                and (
+                    prim.GetPath() == robot_path or prim.GetPath().HasPrefix(scope_path)
+                )
+            }
+            selected_paths = self._joint_connected_rigid_body_paths(
+                seed_path=str(robot_path),
+                candidate_paths=candidate_paths,
+            )
+
+        return [
+            prim
+            for prim in self.stage.TraverseAll()
+            if prim.HasAPI(self.UsdPhysics.RigidBodyAPI)
+            and str(prim.GetPath()) in selected_paths
+        ]
+
     def _build_links(self) -> tuple[list[StdLink], dict[str, str]]:
         links: list[StdLink] = []
         path_to_link_name: dict[str, str] = {}
         names_seen: set[str] = set()
-        rigid_body_prims: list[Any] = []
+        rigid_body_prims = self._discover_rigid_body_prims()
         robot_path = self.robot_prim.GetPath()
 
-        # Some USD files (e.g. those not produced by Newton) use a flat layout
-        # where the ArticulationRoot is applied to the root *link* prim itself,
-        # and all other link prims are siblings under the parent Xform rather
-        # than descendants.  In that case, broaden the search scope one level
-        # up so that sibling rigid bodies are collected as well.
-        if self.robot_prim.HasAPI(self.UsdPhysics.RigidBodyAPI):
-            search_path = robot_path.GetParentPath()
-        else:
-            search_path = robot_path
-
-        for prim in self.stage.TraverseAll():
-            if not prim.GetPath().HasPrefix(search_path):
-                continue
-            if not prim.HasAPI(self.UsdPhysics.RigidBodyAPI):
-                continue
-
+        for prim in rigid_body_prims:
             name = prim.GetName()
             if name in names_seen:
                 raise ValueError(
@@ -508,13 +570,11 @@ class USDModelFactory(ModelFactory):
                     "Use unique prim names inside the robot subtree."
                 )
             names_seen.add(name)
-
-            rigid_body_prims.append(prim)
             path_to_link_name[str(prim.GetPath())] = name
 
         if not rigid_body_prims:
             raise ValueError(
-                f"No rigid bodies found under '{search_path}' in USD stage."
+                f"No rigid bodies found for robot root '{robot_path}' in USD stage."
             )
 
         self._rigid_body_paths = tuple(prim.GetPath() for prim in rigid_body_prims)
@@ -588,11 +648,8 @@ class USDModelFactory(ModelFactory):
         # When localPos1/localRot1 is identity this reduces to the parent frame.
         p0 = _vec3_to_np(pos0)
         p1 = _vec3_to_np(pos1)
-        q0_xyzw = _quat_to_xyzw(rot0)
-        q1_xyzw = _quat_to_xyzw(rot1)
-
-        R0 = R.from_quat(q0_xyzw)
-        R1 = R.from_quat(q1_xyzw)
+        R0 = _rotation_from_usd_quat(rot0)
+        R1 = _rotation_from_usd_quat(rot1)
 
         # Combined rotation: R0 * R1^{-1}
         R_combined = R0 * R1.inv()
@@ -650,8 +707,7 @@ class USDModelFactory(ModelFactory):
                 )
                 rot1 = joint.GetLocalRot1Attr().Get()
                 if rot1 is not None and not _is_identity_quat(rot1):
-                    q1_xyzw = _quat_to_xyzw(rot1)
-                    axis = R.from_quat(q1_xyzw).apply(axis_in_anchor)
+                    axis = _rotation_from_usd_quat(rot1).apply(axis_in_anchor)
                 else:
                     axis = axis_in_anchor
 
