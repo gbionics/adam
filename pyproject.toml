@@ -54,7 +54,6 @@ test = [
   "pytest",
   "idyntree",
   "icub-models",
-  "usd-core",
   "black",
   "requests",
   "liecasadi",
