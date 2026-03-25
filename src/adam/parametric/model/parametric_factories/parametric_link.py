@@ -8,7 +8,7 @@ import urdf_parser_py.urdf
 from adam.core.spatial_math import SpatialMath
 from adam.model import Link
 from adam.model.abc_factories import Inertia, Inertial, Pose
-from adam.model.visuals import normalize_urdf_visual
+from adam.model.std_factories.urdf_visual import normalize_urdf_visual
 
 
 class Geometry(Enum):
