@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import pathlib
 from typing import Any
-import trimesh
 
 import numpy as np
-from scipy.spatial.transform import Rotation
+from scipy.spatial.transform import Rotation as R
+
+import trimesh
+
 import viser
 
 from adam.model.abc_factories import Pose
@@ -17,6 +19,9 @@ from adam.model.visuals import (
     SphereVisualGeometry,
     Visual,
 )
+
+
+_IDENTITY_WXYZ = R.identity().as_quat(scalar_first=True)
 
 
 def _to_numpy(value: Any) -> np.ndarray:
@@ -31,33 +36,19 @@ def _to_numpy(value: Any) -> np.ndarray:
     return np.asarray(value, dtype=float)
 
 
-def _to_scalar(value: Any) -> float:
-    array = _to_numpy(value)
-    if array.shape == ():
-        return float(array)
-    if array.size != 1:
-        raise ValueError(f"Expected a scalar-compatible value, got {array.shape!r}.")
-    return float(array.reshape(()))
-
-
-def _wxyz_from_rotation(rotation: Rotation) -> np.ndarray:
-    quat_xyzw = rotation.as_quat()
-    return np.array(
-        [quat_xyzw[3], quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]],
-        dtype=float,
-    )
-
-
 def _transform_to_viser(transform: Any) -> tuple[np.ndarray, np.ndarray]:
     matrix = _to_numpy(transform)
     if matrix.shape != (4, 4):
         raise ValueError(f"Expected a 4x4 transform, got {matrix.shape!r}.")
-    return _wxyz_from_rotation(Rotation.from_matrix(matrix[:3, :3])), matrix[:3, 3]
+    return (
+        R.from_matrix(matrix[:3, :3]).as_quat(scalar_first=True),
+        matrix[:3, 3].copy(),
+    )
 
 
 def _pose_to_matrix(origin: Pose) -> np.ndarray:
     transform = np.eye(4, dtype=float)
-    transform[:3, :3] = Rotation.from_euler("xyz", _to_numpy(origin.rpy)).as_matrix()
+    transform[:3, :3] = R.from_euler("xyz", _to_numpy(origin.rpy)).as_matrix()
     transform[:3, 3] = _to_numpy(origin.xyz)
     return transform
 
@@ -291,8 +282,8 @@ class ModelHandle:
     def _joint_slider_limits(self, joint_name: str) -> tuple[float, float]:
         joint = self.model.joints[joint_name]
         if joint.limit is not None:
-            lower = (joint.limit.lower)
-            upper = (joint.limit.upper)
+            lower = joint.limit.lower
+            upper = joint.limit.upper
             if np.isfinite(lower) and np.isfinite(upper) and lower < upper:
                 return lower, upper
         if joint.type == "revolute":
@@ -318,7 +309,20 @@ class ModelHandle:
         return f"{self.root_name}/{link_name}"
 
     def _visual_name(self, link_name: str, visual_index: int, name: str | None) -> str:
-        suffix = name or f"visual_{visual_index}"
+        # Use generic suffix if no name provided, otherwise use the actual name
+        # (or append index if the name appears multiple times in this link)
+        if name is None:
+            suffix = f"visual_{visual_index}"
+        else:
+            # Count how many visuals in this link share the same name.
+            # If the name is unique, use it as-is; if duplicates exist,
+            # append the index to disambiguate (e.g. "arm_1", "arm_2").
+            duplicate_count = sum(
+                1
+                for visual in self._visuals_by_link.get(link_name, ())
+                if visual.name == name
+            )
+            suffix = name if duplicate_count == 1 else f"{name}_{visual_index}"
         return f"{self._link_frame_name(link_name)}/{suffix}"
 
     def _add_visual_node(self, link_name: str, visual: Visual, visual_index: int):
@@ -332,7 +336,7 @@ class ModelHandle:
                 color=color,
                 dimensions=np.asarray(visual.geometry.size, dtype=float),
                 opacity=opacity,
-                wxyz=np.array([1.0, 0.0, 0.0, 0.0]),
+                wxyz=_IDENTITY_WXYZ.copy(),
                 position=np.zeros(3, dtype=float),
             )
 
@@ -343,7 +347,7 @@ class ModelHandle:
                 height=float(visual.geometry.length),
                 color=color,
                 opacity=opacity,
-                wxyz=np.array([1.0, 0.0, 0.0, 0.0]),
+                wxyz=_IDENTITY_WXYZ.copy(),
                 position=np.zeros(3, dtype=float),
             )
 
@@ -353,7 +357,7 @@ class ModelHandle:
                 radius=float(visual.geometry.radius),
                 color=color,
                 opacity=opacity,
-                wxyz=np.array([1.0, 0.0, 0.0, 0.0]),
+                wxyz=_IDENTITY_WXYZ.copy(),
                 position=np.zeros(3, dtype=float),
             )
 
@@ -364,7 +368,7 @@ class ModelHandle:
                 faces=np.asarray(visual.geometry.faces, dtype=np.uint32),
                 color=color,
                 opacity=opacity,
-                wxyz=np.array([1.0, 0.0, 0.0, 0.0]),
+                wxyz=_IDENTITY_WXYZ.copy(),
                 position=np.zeros(3, dtype=float),
             )
 
@@ -375,7 +379,6 @@ class ModelHandle:
                     "Mesh paths must be resolved by the model factory before visualization. "
                     f"Got: {visual.geometry.filename}"
                 )
-            # trimesh = _import_optional_dependency("trimesh", "visualization")
             mesh = trimesh.load(mesh_path, force="mesh")
             vertices = np.asarray(mesh.vertices, dtype=np.float32)
             scale = np.asarray(visual.geometry.scale, dtype=np.float32)
@@ -389,7 +392,7 @@ class ModelHandle:
                 faces=np.asarray(mesh.faces, dtype=np.uint32),
                 color=color,
                 opacity=opacity,
-                wxyz=np.array([1.0, 0.0, 0.0, 0.0]),
+                wxyz=_IDENTITY_WXYZ.copy(),
                 position=np.zeros(3, dtype=float),
             )
 
@@ -429,9 +432,10 @@ class Visualizer:
         default_color: tuple[int, int, int] = (160, 160, 160),
     ) -> None:
         self._owns_server = server is None
-        self.server = (
-            viser.ViserServer(host=host, port=port) if server is None else server
-        )
+        if server is None:
+            self.server = viser.ViserServer(host=host, port=port)
+        else:
+            self.server = server
         self._models: dict[str, ModelHandle] = {}
         self._default_model: ModelHandle | None = None
 
