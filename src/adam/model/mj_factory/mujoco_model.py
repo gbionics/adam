@@ -6,7 +6,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 from adam.core.spatial_math import SpatialMath
-from adam.model.abc_factories import Limits, ModelFactory
+from adam.model.abc_factories import Limits, ModelFactory, Pose
 from adam.model.visuals import (
     BoxVisualGeometry,
     CylinderVisualGeometry,
@@ -14,6 +14,7 @@ from adam.model.visuals import (
     SphereVisualGeometry,
     Visual,
     VisualMaterial,
+    capsule_mesh_geometry,
 )
 from adam.model.std_factories.std_joint import StdJoint
 from adam.model.std_factories.std_link import StdLink
@@ -70,12 +71,6 @@ def _normalize_quaternion(quat: np.ndarray) -> np.ndarray:
     if norm == 0:
         return np.array([1.0, 0.0, 0.0, 0.0], dtype=float)
     return quat / norm
-
-
-def _rotate_vector(quat: np.ndarray, vec: np.ndarray) -> np.ndarray:
-    """Rotate a vector using quaternion [w, x, y, z]."""
-    rot = R.from_quat(quat, scalar_first=True).as_matrix()
-    return rot @ vec
 
 
 def _quat_to_rpy(quat: np.ndarray) -> np.ndarray:
@@ -160,10 +155,8 @@ class MujocoModelFactory(ModelFactory):
         )
         return name if name is not None else f"geom_{geom_id}"
 
-    def _pose_from_pos_quat(
-        self, pos: np.ndarray, quat: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray]:
-        return np.asarray(pos, dtype=float), _quat_to_rpy(quat)
+    def _pose_from_pos_quat(self, pos: np.ndarray, quat: np.ndarray) -> Pose:
+        return Pose.build(np.asarray(pos, dtype=float), _quat_to_rpy(quat), self.math)
 
     def _compiled_mesh_geometry(self, mesh_id: int) -> EmbeddedMeshVisualGeometry:
         vert_start = int(self.mj_model.mesh_vertadr[mesh_id])
@@ -193,30 +186,35 @@ class MujocoModelFactory(ModelFactory):
         )
 
         if geom_type == self.mujoco.mjtGeom.mjGEOM_BOX:
-            geometry = BoxVisualGeometry(size=tuple(float(2.0 * v) for v in geom_size[:3]))
-            xyz, rpy = self._pose_from_pos_quat(geom_pos, geom_quat)
+            geometry = BoxVisualGeometry(
+                size=tuple(float(2.0 * v) for v in geom_size[:3])
+            )
+            origin = self._pose_from_pos_quat(geom_pos, geom_quat)
         elif geom_type == self.mujoco.mjtGeom.mjGEOM_SPHERE:
             geometry = SphereVisualGeometry(radius=float(geom_size[0]))
-            xyz, rpy = self._pose_from_pos_quat(geom_pos, geom_quat)
-        elif geom_type in (
-            self.mujoco.mjtGeom.mjGEOM_CYLINDER,
-            self.mujoco.mjtGeom.mjGEOM_CAPSULE,
-        ):
+            origin = self._pose_from_pos_quat(geom_pos, geom_quat)
+        elif geom_type == self.mujoco.mjtGeom.mjGEOM_CYLINDER:
             geometry = CylinderVisualGeometry(
                 radius=float(geom_size[0]),
                 length=float(2.0 * geom_size[1]),
             )
-            xyz, rpy = self._pose_from_pos_quat(geom_pos, geom_quat)
+            origin = self._pose_from_pos_quat(geom_pos, geom_quat)
+        elif geom_type == self.mujoco.mjtGeom.mjGEOM_CAPSULE:
+            geometry = capsule_mesh_geometry(
+                radius=float(geom_size[0]),
+                cylindrical_length=float(2.0 * geom_size[1]),
+            )
+            origin = self._pose_from_pos_quat(geom_pos, geom_quat)
         elif geom_type == self.mujoco.mjtGeom.mjGEOM_MESH:
             mesh_id = int(self.mj_model.geom_dataid[geom_id])
-            xyz, rpy = self._pose_from_pos_quat(geom_pos, geom_quat)
             geometry = self._compiled_mesh_geometry(mesh_id)
+            origin = self._pose_from_pos_quat(geom_pos, geom_quat)
         else:
             return None
 
         return Visual(
             name=self._geom_name(geom_id),
-            origin=MujocoOrigin(xyz=xyz, rpy=rpy),
+            origin=origin,
             geometry=geometry,
             material=material,
         )
@@ -287,7 +285,7 @@ class MujocoModelFactory(ModelFactory):
         if joint_id is not None:
             j_pos = np.array(self.mj_model.jnt_pos[joint_id], dtype=float)
             if np.linalg.norm(j_pos) > 0.0:
-                xyz = xyz + _rotate_vector(body_quat, j_pos)
+                xyz = xyz + R.from_quat(body_quat, scalar_first=True).apply(j_pos)
         rpy = R.from_quat(body_quat, scalar_first=True).as_euler("xyz")
         return MujocoOrigin(xyz=xyz, rpy=rpy)
 
