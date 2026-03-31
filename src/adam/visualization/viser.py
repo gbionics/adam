@@ -112,6 +112,8 @@ class ModelHandle:
         kindyn: Any,
         *,
         root_name: str,
+        base_transform: Any | None = None,
+        joint_positions: Any | None = None,
         show_frames: bool = False,
         axes_length: float = 0.1,
         axes_radius: float = 0.01,
@@ -119,7 +121,6 @@ class ModelHandle:
         default_color: tuple[int, int, int] = (160, 160, 160),
     ) -> None:
         self.visualizer = visualizer
-        self.server = visualizer.server
         self.kindyn = kindyn
         self.model = _extract_model(kindyn)
         self.root_name = _normalize_node_name(root_name)
@@ -145,7 +146,14 @@ class ModelHandle:
         }
 
         self.render()
-        self.update(np.eye(4), np.zeros(self.model.NDoF))
+        self.update(
+            np.eye(4, dtype=float) if base_transform is None else base_transform,
+            (
+                np.zeros(self.model.NDoF, dtype=float)
+                if joint_positions is None
+                else joint_positions
+            ),
+        )
 
     def scene_path(self, name: str) -> str:
         return _scene_path(name, root_name=self.root_name)
@@ -525,36 +533,6 @@ class Visualizer:
             )
         return method(self.scene_path(name, root_name=root_name), **kwargs)
 
-    def add_frame(self, name: str, *, root_name: str | None = None, **kwargs) -> Any:
-        return self.add_scene_node("add_frame", name, root_name=root_name, **kwargs)
-
-    def add_box(self, name: str, *, root_name: str | None = None, **kwargs) -> Any:
-        return self.add_scene_node("add_box", name, root_name=root_name, **kwargs)
-
-    def add_cylinder(
-        self, name: str, *, root_name: str | None = None, **kwargs
-    ) -> Any:
-        return self.add_scene_node(
-            "add_cylinder", name, root_name=root_name, **kwargs
-        )
-
-    def add_icosphere(
-        self, name: str, *, root_name: str | None = None, **kwargs
-    ) -> Any:
-        return self.add_scene_node(
-            "add_icosphere", name, root_name=root_name, **kwargs
-        )
-
-    def add_mesh_simple(
-        self, name: str, *, root_name: str | None = None, **kwargs
-    ) -> Any:
-        return self.add_scene_node(
-            "add_mesh_simple", name, root_name=root_name, **kwargs
-        )
-
-    def add_grid(self, name: str, *, root_name: str | None = None, **kwargs) -> Any:
-        return self.add_scene_node("add_grid", name, root_name=root_name, **kwargs)
-
     def add_model(
         self,
         kindyn: Any,
@@ -584,6 +562,8 @@ class Visualizer:
             self,
             kindyn,
             root_name=normalized_root_name,
+            base_transform=base_transform,
+            joint_positions=joint_positions,
             show_frames=show_frames,
             axes_length=axes_length,
             axes_radius=axes_radius,
@@ -591,20 +571,6 @@ class Visualizer:
             default_color=default_color,
         )
         self._models[normalized_root_name] = handle
-
-        if base_transform is not None or joint_positions is not None:
-            handle.update(
-                (
-                    handle._current_base_transform
-                    if base_transform is None
-                    else base_transform
-                ),
-                (
-                    handle._current_joint_positions
-                    if joint_positions is None
-                    else joint_positions
-                ),
-            )
 
         if self._default_model is None:
             self._default_model = handle
@@ -691,9 +657,3 @@ class Visualizer:
                 initial_camera.position = camera_position
             if camera_look_at is not None:
                 initial_camera.look_at = camera_look_at
-
-    def __getattr__(self, name: str) -> Any:
-        default_model = self.__dict__.get("_default_model")
-        if default_model is not None:
-            return getattr(default_model, name)
-        raise AttributeError(f"{self.__class__.__name__!s} has no attribute {name!r}.")
