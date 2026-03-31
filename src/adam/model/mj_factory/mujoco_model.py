@@ -82,6 +82,7 @@ class MujocoModelFactory(ModelFactory):
         self._links = self._build_links()
         self._child_map = self._build_child_map()
         self._joints = self._build_joints()
+        self._site_links, self._site_joints = self._build_sites()
 
     def _import_mujoco(self):
         try:
@@ -254,6 +255,63 @@ class MujocoModelFactory(ModelFactory):
                 )
         return joints
 
+    def _site_name(self, site_id: int) -> str:
+        name = self.mujoco.mj_id2name(
+            self.mj_model, self.mujoco.mjtObj.mjOBJ_SITE, site_id
+        )
+        return name if name is not None else f"site_{site_id}"
+
+    def _build_sites(self) -> tuple[list[StdLink], list[StdJoint]]:
+        """Build zero-mass links and fixed joints for MuJoCo sites."""
+        site_links: list[StdLink] = []
+        site_joints: list[StdJoint] = []
+        existing_names = {link.name for link in self._links}
+
+        for site_id in range(self.mj_model.nsite):
+            site_name = self._site_name(site_id)
+            if site_name in existing_names:
+                continue
+
+            body_id = int(self.mj_model.site_bodyid[site_id])
+            if body_id < 1:
+                # Site attached to the world body; skip.
+                continue
+            parent_name = self._body_name(body_id)
+
+            site_pos = np.array(self.mj_model.site_pos[site_id], dtype=float)
+            site_quat = _normalize_quaternion(
+                np.array(self.mj_model.site_quat[site_id], dtype=float)
+            )
+            rpy = R.from_quat(site_quat, scalar_first=True).as_euler("xyz")
+
+            zero_inertia = MujocoInertia(
+                ixx=0.0, ixy=0.0, ixz=0.0, iyy=0.0, iyz=0.0, izz=0.0
+            )
+            zero_origin = MujocoOrigin(xyz=np.zeros(3), rpy=np.zeros(3))
+            site_link = MujocoLink(
+                name=site_name,
+                inertial=MujocoInertial(
+                    mass=0.0, inertia=zero_inertia, origin=zero_origin
+                ),
+                visuals=[],
+                collisions=[],
+            )
+            site_links.append(StdLink(site_link, self.math))
+
+            site_joint = MujocoJoint(
+                name=f"{parent_name}_to_{site_name}_fixed",
+                parent=parent_name,
+                child=site_name,
+                joint_type="fixed",
+                axis=None,
+                origin=MujocoOrigin(xyz=site_pos, rpy=rpy),
+                limit=None,
+            )
+            site_joints.append(StdJoint(site_joint, self.math))
+            existing_names.add(site_name)
+
+        return site_links, site_joints
+
     def build_joint(self, joint) -> StdJoint:  # pragma: no cover - required by ABC
         raise NotImplementedError("MujocoModelFactory does not build joints externally")
 
@@ -261,7 +319,7 @@ class MujocoModelFactory(ModelFactory):
         raise NotImplementedError("MujocoModelFactory does not build links externally")
 
     def get_joints(self) -> list[StdJoint]:
-        return self._joints
+        return self._joints + self._site_joints
 
     def _has_non_fixed_joint(self, link_name: str) -> bool:
         return any(j.child == link_name and j.type != "fixed" for j in self._joints)
@@ -278,10 +336,11 @@ class MujocoModelFactory(ModelFactory):
         ]
 
     def get_frames(self) -> list[StdLink]:
-        return [
+        body_frames = [
             link
             for link in self._links
             if float(link.inertial.mass.array) == 0.0
             and link.name not in self._child_map.keys()
             and not self._has_non_fixed_joint(link.name)
         ]
+        return body_frames + self._site_links

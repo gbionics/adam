@@ -93,6 +93,7 @@ class USDModelFactory(ModelFactory):
         self._links, self._path_to_link_name = self._build_links()
         self._joints = self._build_joints()
         self._child_map = self._build_child_map()
+        self._frame_links, self._frame_joints = self._build_frame_xforms()
 
     def _import_openusd(self):
         try:
@@ -433,6 +434,76 @@ class USDModelFactory(ModelFactory):
 
         return joints
 
+    def _build_frame_xforms(self) -> tuple[list[StdLink], list[StdJoint]]:
+        """Discover child Xform prims of rigid bodies and expose them as frames."""
+        import warnings as _warn
+
+        frame_links: list[StdLink] = []
+        frame_joints: list[StdJoint] = []
+        existing_names = set(self._path_to_link_name.values())
+
+        for parent_path, parent_name in list(self._path_to_link_name.items()):
+            parent_prim = self.stage.GetPrimAtPath(parent_path)
+            for child_prim in parent_prim.GetChildren():
+                if child_prim.HasAPI(self.UsdPhysics.RigidBodyAPI):
+                    continue
+                if child_prim.IsA(self.UsdPhysics.Joint):
+                    continue
+                if not child_prim.IsA(self.UsdGeom.Xformable):
+                    continue
+
+                child_name = child_prim.GetName()
+                if child_name in existing_names:
+                    continue
+
+                xformable = self.UsdGeom.Xformable(child_prim)
+                local_transform = xformable.GetLocalTransformation()
+                translate = local_transform.ExtractTranslation()
+                rot_quat = local_transform.ExtractRotationQuat()
+                q_xyzw = _quat_to_xyzw(rot_quat)
+                R_frame = R.from_quat(q_xyzw)
+                with _warn.catch_warnings():
+                    _warn.filterwarnings(
+                        "ignore",
+                        message="Gimbal lock detected.*",
+                        category=UserWarning,
+                    )
+                    rpy = R_frame.as_euler("xyz")
+
+                zero_inertial = USDInertial(
+                    mass=0.0,
+                    inertia=USDInertia(
+                        ixx=0.0, ixy=0.0, ixz=0.0, iyy=0.0, iyz=0.0, izz=0.0
+                    ),
+                    origin=USDOrigin(xyz=np.zeros(3), rpy=np.zeros(3)),
+                )
+                frame_link = USDLink(
+                    name=child_name,
+                    inertial=zero_inertial,
+                    visuals=[],
+                    collisions=[],
+                )
+                frame_links.append(StdLink(frame_link, self.math))
+
+                frame_joint = USDJoint(
+                    name=f"{parent_name}_to_{child_name}_fixed",
+                    parent=parent_name,
+                    child=child_name,
+                    joint_type="fixed",
+                    axis=None,
+                    origin=USDOrigin(
+                        xyz=np.array(
+                            [translate[0], translate[1], translate[2]], dtype=float
+                        ),
+                        rpy=rpy,
+                    ),
+                    limit=None,
+                )
+                frame_joints.append(StdJoint(frame_joint, self.math))
+                existing_names.add(child_name)
+
+        return frame_links, frame_joints
+
     def _build_child_map(self) -> dict[str, list[str]]:
         child_map: dict[str, list[str]] = {}
         for joint in self._joints:
@@ -446,7 +517,7 @@ class USDModelFactory(ModelFactory):
         raise NotImplementedError("USDModelFactory does not build links externally")
 
     def get_joints(self) -> list[StdJoint]:
-        return self._joints
+        return self._joints + self._frame_joints
 
     def _has_non_fixed_joint(self, link_name: str) -> bool:
         return any(j.child == link_name and j.type != "fixed" for j in self._joints)
@@ -463,10 +534,11 @@ class USDModelFactory(ModelFactory):
         ]
 
     def get_frames(self) -> list[StdLink]:
-        return [
+        body_frames = [
             link
             for link in self._links
             if float(link.inertial.mass.array) == 0.0
             and link.name not in self._child_map.keys()
             and not self._has_non_fixed_joint(link.name)
         ]
+        return body_frames + self._frame_links
