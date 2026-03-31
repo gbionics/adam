@@ -290,6 +290,15 @@ def test_visualizer_builds_scene_and_updates_link_frames(fake_viser):
     assert ("add_grid", "/ground") in [
         (method, name) for method, name, _ in visualizer.server.scene.calls
     ]
+    ground_call = next(
+        call
+        for call in visualizer.server.scene.calls
+        if call[0] == "add_grid" and call[1] == "/ground"
+    )
+    assert ground_call[2]["plane_color"] == (248, 249, 251)
+    assert ground_call[2]["cell_color"] == (214, 217, 223)
+    assert ground_call[2]["section_color"] == (214, 217, 223)
+    assert ground_call[2]["section_thickness"] == pytest.approx(0.9)
     assert ("configure_default_lights", "") in [
         (method, name) for method, name, _ in visualizer.server.scene.calls
     ]
@@ -481,6 +490,59 @@ def test_multiple_visualizers_can_share_one_server(fake_viser):
     recorded_names = [name for method, name, _ in visualizer.server.scene.calls]
     assert "/robot_a/base/visual_0" in recorded_names
     assert "/robot_b/base/visual_0" in recorded_names
+
+
+def test_visualizer_exposes_scene_gui_and_scene_helpers(fake_viser):
+    visualizer = Visualizer()
+
+    assert visualizer.scene is visualizer.server.scene
+    assert visualizer.gui is visualizer.server.gui
+    assert visualizer.scene_path("debug/box") == "/debug/box"
+    assert visualizer.scene_path("tool", root_name="/extras") == "/extras/tool"
+    assert visualizer.scene_path("/world/target", root_name="/ignored") == "/world/target"
+
+    visualizer.add_box(
+        "debug/box",
+        dimensions=np.array([0.1, 0.2, 0.3]),
+        color=(255, 0, 0),
+    )
+    visualizer.add_frame("tool", root_name="/extras", show_axes=True)
+
+    recorded = [(method, name) for method, name, _ in visualizer.server.scene.calls]
+    assert ("add_box", "/debug/box") in recorded
+    assert ("add_frame", "/extras/tool") in recorded
+
+
+def test_model_handle_exposes_namespaced_scene_path(fake_viser):
+    urdf = """
+    <robot name="helper_robot">
+      <link name="base">
+        <inertial>
+          <origin xyz="0 0 0" rpy="0 0 0"/>
+          <mass value="1.0"/>
+          <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+        </inertial>
+      </link>
+    </robot>
+    """
+    kindyn = _build_kindyn(urdf)
+    visualizer = Visualizer()
+    model_handle = visualizer.add_model(kindyn, root_name="/robot")
+
+    assert model_handle.scene_path("markers/box") == "/robot/markers/box"
+    assert model_handle.scene_path("/world/target") == "/world/target"
+
+    visualizer.add_frame("target", root_name=model_handle.root_name, show_axes=False)
+    visualizer.add_box(
+        "markers/box",
+        root_name=model_handle.root_name,
+        dimensions=np.array([0.1, 0.1, 0.1]),
+        color=(0, 255, 0),
+    )
+
+    recorded = [(method, name) for method, name, _ in visualizer.server.scene.calls]
+    assert ("add_frame", "/robot/target") in recorded
+    assert ("add_box", "/robot/markers/box") in recorded
 
 
 def test_visualizer_resolves_package_meshes_from_model_roots(
