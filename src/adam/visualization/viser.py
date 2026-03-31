@@ -6,9 +6,15 @@ from typing import Any
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-import trimesh
+try:
+    import trimesh
+except ImportError:  # pragma: no cover - optional dependency
+    trimesh = None
 
-import viser
+try:
+    import viser
+except ImportError:  # pragma: no cover - optional dependency
+    viser = None
 
 from adam.model.abc_factories import Pose
 from adam.model.visuals import (
@@ -89,6 +95,14 @@ def _normalize_node_name(root_name: str) -> str:
     return root_name.rstrip("/")
 
 
+def _scene_path(name: str, *, root_name: str | None = None) -> str:
+    if name.startswith("/"):
+        return _normalize_node_name(name)
+    if root_name is None:
+        return _normalize_node_name(name)
+    return f"{_normalize_node_name(root_name)}/{name.lstrip('/')}"
+
+
 class ModelHandle:
     """Scene node bundle for one robot instance attached to a Visualizer."""
 
@@ -133,13 +147,16 @@ class ModelHandle:
         self.render()
         self.update(np.eye(4), np.zeros(self.model.NDoF))
 
+    def scene_path(self, name: str) -> str:
+        return _scene_path(name, root_name=self.root_name)
+
     def render(self) -> None:
         if self._rendered:
             return
 
         if self.show_frames:
             for node in self.model.tree:
-                self._frame_handles[node.name] = self.server.scene.add_frame(
+                self._frame_handles[node.name] = self.visualizer.scene.add_frame(
                     self._link_frame_name(node.name),
                     show_axes=True,
                     axes_length=self.axes_length,
@@ -222,19 +239,15 @@ class ModelHandle:
             return {}
         if self._joint_slider_handles:
             return self._joint_slider_handles
-        if not hasattr(self.server, "gui"):
-            raise AttributeError(
-                "The configured viser server does not expose a GUI API."
-            )
 
         if initial_joint_positions is not None:
             self.update(self._current_base_transform, initial_joint_positions)
 
         self._joint_slider_defaults = self._current_joint_positions.copy()
-        with self.server.gui.add_folder(
+        with self.visualizer.gui.add_folder(
             folder_name, expand_by_default=expand_by_default
         ):
-            reset_button = self.server.gui.add_button("Reset Joints")
+            reset_button = self.visualizer.gui.add_button("Reset Joints")
             for joint_name in self.model.actuated_joints:
                 joint_index = self.model.joints[joint_name].idx
                 lower, upper = self._joint_slider_limits(joint_name)
@@ -242,7 +255,7 @@ class ModelHandle:
                     np.clip(self._current_joint_positions[joint_index], lower, upper)
                 )
                 self._joint_slider_defaults[joint_index] = initial_value
-                slider = self.server.gui.add_slider(
+                slider = self.visualizer.gui.add_slider(
                     joint_name,
                     min=lower,
                     max=upper,
@@ -331,7 +344,7 @@ class ModelHandle:
         name = self._visual_name(link_name, visual_index, visual.name)
 
         if isinstance(visual.geometry, BoxVisualGeometry):
-            return self.server.scene.add_box(
+            return self.visualizer.scene.add_box(
                 name,
                 color=color,
                 dimensions=np.asarray(visual.geometry.size, dtype=float),
@@ -341,7 +354,7 @@ class ModelHandle:
             )
 
         if isinstance(visual.geometry, CylinderVisualGeometry):
-            return self.server.scene.add_cylinder(
+            return self.visualizer.scene.add_cylinder(
                 name,
                 radius=float(visual.geometry.radius),
                 height=float(visual.geometry.length),
@@ -352,7 +365,7 @@ class ModelHandle:
             )
 
         if isinstance(visual.geometry, SphereVisualGeometry):
-            return self.server.scene.add_icosphere(
+            return self.visualizer.scene.add_icosphere(
                 name,
                 radius=float(visual.geometry.radius),
                 color=color,
@@ -362,7 +375,7 @@ class ModelHandle:
             )
 
         if isinstance(visual.geometry, EmbeddedMeshVisualGeometry):
-            return self.server.scene.add_mesh_simple(
+            return self.visualizer.scene.add_mesh_simple(
                 name,
                 vertices=np.asarray(visual.geometry.vertices, dtype=np.float32),
                 faces=np.asarray(visual.geometry.faces, dtype=np.uint32),
@@ -379,6 +392,11 @@ class ModelHandle:
                     "Mesh paths must be resolved by the model factory before visualization. "
                     f"Got: {visual.geometry.filename}"
                 )
+            if trimesh is None:  # pragma: no cover - exercised via monkeypatch
+                raise ImportError(
+                    "The optional dependency 'trimesh' is required for visualization. "
+                    "Install it with `pip install adam-robotics[visualization]`."
+                )
             mesh = trimesh.load(mesh_path, force="mesh")
             vertices = np.asarray(mesh.vertices, dtype=np.float32)
             scale = np.asarray(visual.geometry.scale, dtype=np.float32)
@@ -386,7 +404,7 @@ class ModelHandle:
                 vertices = vertices * float(scale)
             else:
                 vertices = vertices * scale.reshape(1, 3)
-            return self.server.scene.add_mesh_simple(
+            return self.visualizer.scene.add_mesh_simple(
                 name,
                 vertices=vertices,
                 faces=np.asarray(mesh.faces, dtype=np.uint32),
@@ -418,7 +436,7 @@ class Visualizer:
         ground_width: float = 160.0,
         ground_height: float = 160.0,
         ground_plane: str = "xy",
-        ground_cell_size: float = 0.1,
+        ground_cell_size: float = 0.25,
         ground_section_size: float = 0.5,
         default_lights: bool | None = None,
         default_lights_cast_shadow: bool = True,
@@ -433,6 +451,11 @@ class Visualizer:
     ) -> None:
         self._owns_server = server is None
         if server is None:
+            if viser is None:  # pragma: no cover - exercised via monkeypatch
+                raise ImportError(
+                    "The optional dependency 'viser' is required for visualization. "
+                    "Install it with `pip install adam-robotics[visualization]`."
+                )
             self.server = viser.ViserServer(host=host, port=port)
         else:
             self.server = server
@@ -465,6 +488,72 @@ class Visualizer:
                 origin_radius=origin_radius,
                 default_color=default_color,
             )
+
+    @property
+    def scene(self) -> Any:
+        scene = getattr(self.server, "scene", None)
+        if scene is None:
+            raise AttributeError(
+                "The configured viser server does not expose a scene API."
+            )
+        return scene
+
+    @property
+    def gui(self) -> Any:
+        gui = getattr(self.server, "gui", None)
+        if gui is None:
+            raise AttributeError(
+                "The configured viser server does not expose a GUI API."
+            )
+        return gui
+
+    def scene_path(self, name: str, *, root_name: str | None = None) -> str:
+        return _scene_path(name, root_name=root_name)
+
+    def add_scene_node(
+        self,
+        method_name: str,
+        name: str,
+        *,
+        root_name: str | None = None,
+        **kwargs,
+    ) -> Any:
+        method = getattr(self.scene, method_name, None)
+        if method is None:
+            raise AttributeError(
+                f"The configured viser scene does not expose '{method_name}()'."
+            )
+        return method(self.scene_path(name, root_name=root_name), **kwargs)
+
+    def add_frame(self, name: str, *, root_name: str | None = None, **kwargs) -> Any:
+        return self.add_scene_node("add_frame", name, root_name=root_name, **kwargs)
+
+    def add_box(self, name: str, *, root_name: str | None = None, **kwargs) -> Any:
+        return self.add_scene_node("add_box", name, root_name=root_name, **kwargs)
+
+    def add_cylinder(
+        self, name: str, *, root_name: str | None = None, **kwargs
+    ) -> Any:
+        return self.add_scene_node(
+            "add_cylinder", name, root_name=root_name, **kwargs
+        )
+
+    def add_icosphere(
+        self, name: str, *, root_name: str | None = None, **kwargs
+    ) -> Any:
+        return self.add_scene_node(
+            "add_icosphere", name, root_name=root_name, **kwargs
+        )
+
+    def add_mesh_simple(
+        self, name: str, *, root_name: str | None = None, **kwargs
+    ) -> Any:
+        return self.add_scene_node(
+            "add_mesh_simple", name, root_name=root_name, **kwargs
+        )
+
+    def add_grid(self, name: str, *, root_name: str | None = None, **kwargs) -> Any:
+        return self.add_scene_node("add_grid", name, root_name=root_name, **kwargs)
 
     def add_model(
         self,
@@ -587,6 +676,13 @@ class Visualizer:
                 plane=ground_plane,
                 cell_size=ground_cell_size,
                 section_size=ground_section_size,
+                cell_color=(214, 217, 223),
+                cell_thickness=0.9,
+                section_color=(214, 217, 223),
+                section_thickness=0.9,
+                plane_color=(248, 249, 251),
+                plane_opacity=1.0,
+                shadow_opacity=0.22,
             )
 
         initial_camera = getattr(self.server, "initial_camera", None)
