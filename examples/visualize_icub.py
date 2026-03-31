@@ -81,8 +81,6 @@ def main() -> None:
         ground_width=2.0,
         ground_height=2.0,
         ground_plane="xy",
-        ground_cell_size=0.1,
-        ground_section_size=0.5,
         camera_position=(2.5, -2.0, 1.5),
         camera_look_at=(0.0, 0.0, 0.6),
     )
