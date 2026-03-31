@@ -450,7 +450,11 @@ def test_visualizer_joint_sliders_follow_joint_limits_and_update_pose(fake_viser
     sliders = model_handle.add_joint_sliders(folder_name="Robot Joints")
     slider = sliders["joint1"]
 
-    slider_calls = [call for call in model_handle.server.gui.calls if call[0] == "add_slider"]
+    slider_calls = [
+        call
+        for call in model_handle.visualizer.gui.calls
+        if call[0] == "add_slider"
+    ]
     assert len(slider_calls) == 1
     _, _, slider_kwargs = slider_calls[0]
     assert slider_kwargs["min"] == pytest.approx(-1.0)
@@ -501,12 +505,18 @@ def test_visualizer_exposes_scene_gui_and_scene_helpers(fake_viser):
     assert visualizer.scene_path("tool", root_name="/extras") == "/extras/tool"
     assert visualizer.scene_path("/world/target", root_name="/ignored") == "/world/target"
 
-    visualizer.add_box(
+    visualizer.add_scene_node(
+        "add_box",
         "debug/box",
         dimensions=np.array([0.1, 0.2, 0.3]),
         color=(255, 0, 0),
     )
-    visualizer.add_frame("tool", root_name="/extras", show_axes=True)
+    visualizer.add_scene_node(
+        "add_frame",
+        "tool",
+        root_name="/extras",
+        show_axes=True,
+    )
 
     recorded = [(method, name) for method, name, _ in visualizer.server.scene.calls]
     assert ("add_box", "/debug/box") in recorded
@@ -532,8 +542,14 @@ def test_model_handle_exposes_namespaced_scene_path(fake_viser):
     assert model_handle.scene_path("markers/box") == "/robot/markers/box"
     assert model_handle.scene_path("/world/target") == "/world/target"
 
-    visualizer.add_frame("target", root_name=model_handle.root_name, show_axes=False)
-    visualizer.add_box(
+    visualizer.add_scene_node(
+        "add_frame",
+        "target",
+        root_name=model_handle.root_name,
+        show_axes=False,
+    )
+    visualizer.add_scene_node(
+        "add_box",
         "markers/box",
         root_name=model_handle.root_name,
         dimensions=np.array([0.1, 0.1, 0.1]),

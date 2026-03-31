@@ -135,7 +135,10 @@ def main() -> None:
     joint_positions = np.zeros(kindyn.NDoF)
     model_handle.update(base_transform, joint_positions)
     if not args.animate:
-        model_handle.add_joint_sliders(expand_by_default=False)
+        model_handle.add_joint_sliders(
+            folder_name="G1",
+            expand_by_default=False,
+        )
 
     animated_joint_name = kindyn.model.actuated_joints[0] if kindyn.NDoF > 0 else None
     actual_port = (
@@ -152,7 +155,7 @@ def main() -> None:
             f"with amplitude={args.amplitude} rad and period={args.period} s."
         )
     elif kindyn.NDoF > 0:
-        print("Joint sliders are available in the 'Joints' panel.")
+        print("Joint sliders are available in the 'G1' panel.")
     print("Press Ctrl+C to exit.")
 
     start_time = time.time()

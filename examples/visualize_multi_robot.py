@@ -128,7 +128,7 @@ def main() -> None:
                 description=icub_path,
                 root_name="/icub",
                 base_transform=_base_transform(-3.2, 0.0, DEFAULT_ICUB_HEIGHT),
-                slider_folder="iCub Joints",
+                slider_folder="iCub",
             ),
             dict(
                 label="StickBot",
@@ -136,7 +136,7 @@ def main() -> None:
                 description=str(stickbot_path),
                 root_name="/stickbot",
                 base_transform=_base_transform(-1.6, 0.0, DEFAULT_STICKBOT_HEIGHT),
-                slider_folder="StickBot Joints",
+                slider_folder="StickBot",
             ),
             dict(
                 label="iCub USD",
@@ -144,7 +144,7 @@ def main() -> None:
                 description=str(icub_usd_path),
                 root_name="/icub_usd",
                 base_transform=_base_transform(0.0, 0.0, DEFAULT_STICKBOT_USD_HEIGHT),
-                slider_folder="iCub USD Joints",
+                slider_folder="iCub USD",
             ),
             dict(
                 label="G1",
@@ -152,7 +152,7 @@ def main() -> None:
                 description=g1_mj_description.MJCF_PATH,
                 root_name="/g1",
                 base_transform=_base_transform(1.6, 0.0, DEFAULT_G1_HEIGHT),
-                slider_folder="G1 Joints",
+                slider_folder="G1",
             ),
             dict(
                 label="Aliengo",
@@ -160,7 +160,7 @@ def main() -> None:
                 description=aliengo_mj_description.MJCF_PATH,
                 root_name="/aliengo",
                 base_transform=_base_transform(3.2, 0.0, DEFAULT_ALIENGO_HEIGHT),
-                slider_folder="Aliengo Joints",
+                slider_folder="Aliengo",
             ),
         ]
 

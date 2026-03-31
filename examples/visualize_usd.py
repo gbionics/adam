@@ -153,7 +153,10 @@ def main() -> None:
         joint_positions = np.zeros(kindyn.NDoF)
         model_handle.update(base_transform, joint_positions)
         if kindyn.NDoF > 0:
-            model_handle.add_joint_sliders(expand_by_default=False)
+            model_handle.add_joint_sliders(
+                folder_name=kindyn.model.name,
+                expand_by_default=False,
+            )
 
         actual_port = (
             visualizer.server.get_port()
@@ -166,7 +169,9 @@ def main() -> None:
             print(f"Converted from URDF: {generated_from_urdf}")
         print(f"Viser server running at http://{args.host}:{actual_port}")
         if kindyn.NDoF > 0:
-            print("Joint sliders are available in the 'Joints' panel.")
+            print(
+                f"Joint sliders are available in the '{kindyn.model.name}' panel."
+            )
         print("Press Ctrl+C to exit.")
 
         try:

@@ -94,7 +94,10 @@ def main() -> None:
     base_transform[2, 3] = args.base_height
     joint_positions = np.zeros(kindyn.NDoF)
     model_handle.update(base_transform, joint_positions)
-    model_handle.add_joint_sliders(expand_by_default=False)
+    model_handle.add_joint_sliders(
+        folder_name=args.model,
+        expand_by_default=False,
+    )
 
     actual_port = (
         visualizer.server.get_port()
@@ -104,7 +107,7 @@ def main() -> None:
     print(f"Loaded iCub model: {args.model}")
     print(f"URDF: {model_path}")
     print(f"Viser server running at http://{args.host}:{actual_port}")
-    print("Joint sliders are available in the 'Joints' panel.")
+    print(f"Joint sliders are available in the '{args.model}' panel.")
     print("Press Ctrl+C to exit.")
 
     try:
