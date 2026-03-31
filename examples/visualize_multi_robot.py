@@ -49,7 +49,6 @@ from _example_utils import (
     resolve_stickbot_path,
 )
 
-
 DEFAULT_ICUB_MODEL = "iCubGazeboV2_5"
 DEFAULT_ICUB_HEIGHT = 0.6
 DEFAULT_STICKBOT_HEIGHT = 0.6
@@ -91,10 +90,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--stickbot-urdf",
         default=str(DEFAULT_STICKBOT_URDF),
-        help=(
-            "Path to the StickBot URDF "
-            f"(default: {DEFAULT_STICKBOT_URDF})"
-        ),
+        help=("Path to the StickBot URDF " f"(default: {DEFAULT_STICKBOT_URDF})"),
     )
     return parser.parse_args()
 

@@ -27,7 +27,6 @@ except Exception as exc:  # pragma: no cover - optional dependency
 from adam.numpy import KinDynComputations
 from adam.visualization import Visualizer
 
-
 DEFAULT_MODEL = "iCubGazeboV2_5"
 DEFAULT_BASE_HEIGHT = 0.6
 

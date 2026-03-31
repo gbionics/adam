@@ -65,7 +65,9 @@ def to_idyntree_solid_shape(
     Returns:
         iDynTree.SolidShape: the iDynTree solid shape
     """
-    visual_position = idyntree.bindings.Position.FromPython(_to_sequence(visual.origin.xyz))
+    visual_position = idyntree.bindings.Position.FromPython(
+        _to_sequence(visual.origin.xyz)
+    )
     visual_rotation = idyntree.bindings.Rotation.RPY(*_to_sequence(visual.origin.rpy))
     visual_transform = idyntree.bindings.Transform()
     visual_transform.setRotation(visual_rotation)
@@ -76,14 +78,21 @@ def to_idyntree_solid_shape(
         else (getattr(visual, "name", None) or "visual")
     )
     material = idyntree.bindings.Material(material_name)
-    if visual.material is not None and getattr(visual.material, "color", None) is not None:
+    if (
+        visual.material is not None
+        and getattr(visual.material, "color", None) is not None
+    ):
         color = idyntree.bindings.Vector4()
         color[0] = visual.material.color.rgba[0]
         color[1] = visual.material.color.rgba[1]
         color[2] = visual.material.color.rgba[2]
         color[3] = visual.material.color.rgba[3]
         material.setColor(color)
-    if visual.material is not None and hasattr(visual.material, "rgba") and visual.material.rgba is not None:
+    if (
+        visual.material is not None
+        and hasattr(visual.material, "rgba")
+        and visual.material.rgba is not None
+    ):
         color = idyntree.bindings.Vector4()
         color[0] = visual.material.rgba[0]
         color[1] = visual.material.rgba[1]

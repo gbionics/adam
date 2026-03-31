@@ -24,13 +24,14 @@ from _example_utils import convert_urdf_to_usd
 from adam.numpy import KinDynComputations
 from adam.visualization import Visualizer
 
-
 DEFAULT_ICUB_MODEL = "iCubGazeboV2_5"
 DEFAULT_BASE_HEIGHT = 0.6
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Visualize a USD robot model with ADAM")
+    parser = argparse.ArgumentParser(
+        description="Visualize a USD robot model with ADAM"
+    )
     parser.add_argument(
         "--usd-path",
         default=None,
@@ -110,7 +111,9 @@ def main() -> None:
                     "Install with: pip install icub-models"
                 ) from exc
 
-            icub_path = pathlib.Path(icub_models.get_model_file(args.icub_model)).resolve()
+            icub_path = pathlib.Path(
+                icub_models.get_model_file(args.icub_model)
+            ).resolve()
             usd_path = convert_urdf_to_usd(icub_path, temp_dir)
             generated_from_urdf = icub_path
         else:
@@ -169,9 +172,7 @@ def main() -> None:
             print(f"Converted from URDF: {generated_from_urdf}")
         print(f"Viser server running at http://{args.host}:{actual_port}")
         if kindyn.NDoF > 0:
-            print(
-                f"Joint sliders are available in the '{kindyn.model.name}' panel."
-            )
+            print(f"Joint sliders are available in the '{kindyn.model.name}' panel.")
         print("Press Ctrl+C to exit.")
 
         try:

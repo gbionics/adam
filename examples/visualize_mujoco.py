@@ -35,8 +35,6 @@ except Exception as exc:  # pragma: no cover - optional dependency
 from adam.numpy import KinDynComputations
 from adam.visualization import Visualizer
 
-
-
 # MUJOCO_XML = """
 # <mujoco model="adam_visualizer_demo">
 #   <worldbody>

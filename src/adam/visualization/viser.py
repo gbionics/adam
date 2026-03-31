@@ -26,7 +26,6 @@ from adam.model.visuals import (
     Visual,
 )
 
-
 _IDENTITY_WXYZ = R.identity().as_quat(scalar_first=True)
 
 

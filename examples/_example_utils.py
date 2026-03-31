@@ -2,10 +2,7 @@ from __future__ import annotations
 
 import pathlib
 
-
-DEFAULT_STICKBOT_URDF = (
-    pathlib.Path(__file__).resolve().parent.parent / "stickbot.urdf"
-)
+DEFAULT_STICKBOT_URDF = pathlib.Path(__file__).resolve().parent.parent / "stickbot.urdf"
 STICKBOT_URL = (
     "https://raw.githubusercontent.com/"
     "icub-tech-iit/ergocub-gazebo-simulations/"

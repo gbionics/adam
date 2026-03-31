@@ -312,9 +312,7 @@ class RBDAlgorithms:
             base_transform=base_transform,
             joint_positions=joint_positions,
         )
-        return {
-            self._node_names[idx]: root_to_link[idx] for idx in self._node_indices
-        }
+        return {self._node_names[idx]: root_to_link[idx] for idx in self._node_indices}
 
     def joints_jacobian(
         self, frame: str, joint_positions: npt.ArrayLike

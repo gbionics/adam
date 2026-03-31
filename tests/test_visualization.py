@@ -360,9 +360,7 @@ def test_link_poses_matches_per_link_forward_kinematics():
     for link_name in link_poses:
         assert _as_numpy(link_poses[link_name]) == pytest.approx(
             _as_numpy(
-                kindyn.forward_kinematics(
-                    link_name, base_transform, joint_positions
-                )
+                kindyn.forward_kinematics(link_name, base_transform, joint_positions)
             )
         )
 
@@ -451,9 +449,7 @@ def test_visualizer_joint_sliders_follow_joint_limits_and_update_pose(fake_viser
     slider = sliders["joint1"]
 
     slider_calls = [
-        call
-        for call in model_handle.visualizer.gui.calls
-        if call[0] == "add_slider"
+        call for call in model_handle.visualizer.gui.calls if call[0] == "add_slider"
     ]
     assert len(slider_calls) == 1
     _, _, slider_kwargs = slider_calls[0]
@@ -503,7 +499,9 @@ def test_visualizer_exposes_scene_gui_and_scene_helpers(fake_viser):
     assert visualizer.gui is visualizer.server.gui
     assert visualizer.scene_path("debug/box") == "/debug/box"
     assert visualizer.scene_path("tool", root_name="/extras") == "/extras/tool"
-    assert visualizer.scene_path("/world/target", root_name="/ignored") == "/world/target"
+    assert (
+        visualizer.scene_path("/world/target", root_name="/ignored") == "/world/target"
+    )
 
     visualizer.add_scene_node(
         "add_box",
@@ -583,8 +581,7 @@ def test_visualizer_resolves_package_meshes_from_model_roots(
             ]
         )
     )
-    model_path.write_text(
-        """
+    model_path.write_text("""
         <robot name="mesh_robot">
           <link name="base">
             <inertial>
@@ -602,8 +599,7 @@ def test_visualizer_resolves_package_meshes_from_model_roots(
             </visual>
           </link>
         </robot>
-        """
-    )
+        """)
 
     class FakeMesh:
         vertices = np.array(
@@ -774,8 +770,7 @@ def test_visualizer_renders_compiled_mujoco_meshes_without_trimesh(
             ]
         )
     )
-    mjcf_path.write_text(
-        """
+    mjcf_path.write_text("""
         <mujoco model="mesh_robot">
           <compiler meshdir="assets"/>
           <asset>
@@ -787,8 +782,7 @@ def test_visualizer_renders_compiled_mujoco_meshes_without_trimesh(
             </body>
           </worldbody>
         </mujoco>
-        """
-    )
+        """)
 
     monkeypatch.setattr(visualization_viser, "viser", fake_viser)
     monkeypatch.setattr(
@@ -834,6 +828,7 @@ def test_visualizer_renders_compiled_mujoco_meshes_without_trimesh(
     assert kwargs["vertices"] == pytest.approx(expected_vertices)
     assert np.array_equal(kwargs["faces"], expected_faces)
 
+
 def test_mujoco_factory_uses_compiled_mesh_pose_and_skips_collisions(
     tmp_path: pathlib.Path,
 ):
@@ -855,8 +850,7 @@ def test_mujoco_factory_uses_compiled_mesh_pose_and_skips_collisions(
             ]
         )
     )
-    mjcf_path.write_text(
-        """
+    mjcf_path.write_text("""
         <mujoco model="mesh_robot">
           <compiler meshdir="assets"/>
           <asset>
@@ -869,8 +863,7 @@ def test_mujoco_factory_uses_compiled_mesh_pose_and_skips_collisions(
             </body>
           </worldbody>
         </mujoco>
-        """
-    )
+        """)
 
     mj_model = mujoco.MjModel.from_xml_path(str(mjcf_path))
     kindyn = _build_kindyn(mj_model)
@@ -883,11 +876,19 @@ def test_mujoco_factory_uses_compiled_mesh_pose_and_skips_collisions(
     geom_pos = np.asarray(mj_model.geom_pos[0], dtype=float)
     geom_quat = np.asarray(mj_model.geom_quat[0], dtype=float)
     visual_xyz = np.asarray(
-        visual.origin.xyz.array if hasattr(visual.origin.xyz, "array") else visual.origin.xyz,
+        (
+            visual.origin.xyz.array
+            if hasattr(visual.origin.xyz, "array")
+            else visual.origin.xyz
+        ),
         dtype=float,
     )
     visual_rpy = np.asarray(
-        visual.origin.rpy.array if hasattr(visual.origin.rpy, "array") else visual.origin.rpy,
+        (
+            visual.origin.rpy.array
+            if hasattr(visual.origin.rpy, "array")
+            else visual.origin.rpy
+        ),
         dtype=float,
     )
 
