@@ -18,6 +18,7 @@ Install with your preferred backend(s):
     # Optional model interfaces
     pip install adam-robotics[mujoco]     # MuJoCo model loading
     pip install adam-robotics[usd]        # OpenUSD model loading/conversion
+    pip install adam-robotics[visualization]  # viser-based visualization
 
     # All backends
     pip install adam-robotics[all]        # jax + casadi + pytorch

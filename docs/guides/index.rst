@@ -8,6 +8,7 @@ Detailed guides for understanding and using adam effectively.
 
    concepts
    backend_selection
+   visualization
    mujoco
    usd
    troubleshooting

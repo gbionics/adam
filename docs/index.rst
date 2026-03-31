@@ -44,9 +44,10 @@ Core Features
   - Gradients with JAX and PyTorch
   - Symbolic computation with CasADi
 
-**Advanced Features**
+**Other Features**
   - Parametric models for shape/inertia optimization
   - Inverse kinematics (CasADi)
+  - viser-based robot visualization
   - MuJoCo integration
   - OpenUSD import/export
   - Batch processing (PyTorch and JAX)
@@ -82,6 +83,7 @@ BSD 3-Clause License – `view license <https://choosealicense.com/licenses/bsd-
 
    guides/concepts
    guides/backend_selection
+   guides/visualization
    guides/mujoco
    guides/usd
    guides/troubleshooting
