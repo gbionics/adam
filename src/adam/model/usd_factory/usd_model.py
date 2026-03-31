@@ -528,8 +528,7 @@ class USDModelFactory(ModelFactory):
                 local_transform = xformable.GetLocalTransformation()
                 translate = local_transform.ExtractTranslation()
                 rot_quat = local_transform.ExtractRotationQuat()
-                q_xyzw = _quat_to_xyzw(rot_quat)
-                R_frame = R.from_quat(q_xyzw)
+                R_frame = _rotation_from_usd_quat(rot_quat)
                 with _warn.catch_warnings():
                     _warn.filterwarnings(
                         "ignore",
