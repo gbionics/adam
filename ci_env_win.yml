@@ -21,4 +21,5 @@ dependencies:
   - array-api-compat
   - mujoco
   - robot_descriptions
-  - urdf-usd-converter
+  - pip:
+    - urdf-usd-converter
