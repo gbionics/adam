@@ -45,7 +45,7 @@ all = [
   "adam-robotics[jax,casadi,pytorch,mujoco,usd,conversion]",
 ]
 test = [
-  "adam-robotics[all]",
+  "adam-robotics[jax,casadi,pytorch,mujoco,conversion]"
   "pytest",
   "requests",
   "robot_descriptions",
