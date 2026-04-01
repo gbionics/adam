@@ -35,7 +35,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-jax = ["jax<=0.6.0", "jaxlib"]
+jax = ["jax", "jaxlib"]
 casadi = ["casadi>=3.6", "liecasadi"]
 pytorch = ["torch"]
 mujoco = ["mujoco"]
