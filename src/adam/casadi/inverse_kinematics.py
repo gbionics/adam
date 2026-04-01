@@ -43,6 +43,7 @@ class InverseKinematics:
         joints_list: list[str],
         joint_limits_active: bool = True,
         solver_settings: dict[str, Any] = None,
+        convert_revolute_to_spherical: bool = False,
     ):
         """Initialize the InverseKinematics solver.
 
@@ -52,9 +53,13 @@ class InverseKinematics:
             joint_limits_active (bool, optional): If True, enforces joint limits. Defaults to True.
             solver_settings (dict[str, ], optional): Settings for the solver. Defaults to None.
         """
-        self.kd = KinDynComputations(urdf_path, joints_list)
-        self.ndof = len(joints_list)
-        self.joints_list = joints_list
+        self.kd = KinDynComputations(
+            urdf_path,
+            joints_list,
+            convert_revolute_to_spherical=convert_revolute_to_spherical,
+        )
+        self.ndof = self.kd.NDoF
+        self.joints_list = self.kd.rbdalgos.model.actuated_joints
 
         # Opti variables --------------------------------------------------
         self.opti = cs.Opti()

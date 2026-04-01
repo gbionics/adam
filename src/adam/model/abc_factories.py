@@ -91,7 +91,8 @@ class Joint(abc.ABC):
     axis: npt.ArrayLike
     origin: Pose
     limit: Limits
-    idx: int
+    idx: int | tuple[int, ...]
+    dofs: int
     """
     Abstract base class for all joints.
     """

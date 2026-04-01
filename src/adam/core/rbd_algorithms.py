@@ -131,13 +131,16 @@ class RBDAlgorithms:
                     Xup[idx],
                 )
 
-        def block_index(node_idx: int) -> int | None:
+        def block_info(node_idx: int) -> list[tuple[int, int]] | None:
+            """Return list of (block_index, local_dof_offset) for a node, or None."""
             if node_idx == root_idx:
-                return 0
+                return [(0, 0)]
             joint_idx = joint_indices[node_idx]
             if joint_idx is None:
                 return None
-            return 1 + int(joint_idx)
+            if isinstance(joint_idx, tuple):
+                return [(1 + j, k) for k, j in enumerate(joint_idx)]
+            return [(1 + int(joint_idx), 0)]
 
         sizes = [6] + [1] * n
         blocks: list[list[npt.ArrayLike | None]] = [
@@ -148,30 +151,38 @@ class RBDAlgorithms:
             Phi_i = Phi[idx]
             Phi_T = math.swapaxes(Phi_i, -2, -1)
             F = math.mtimes(Ic_comp[idx], Phi_i)
-            ri = block_index(idx)
+            ri_info = block_info(idx)
 
             if idx == root_idx:
                 blocks[0][0] = math.mtimes(Phi_T, F)
                 continue
 
-            if ri is not None:
-                blocks[ri][ri] = math.mtimes(Phi_T, F)
+            if ri_info is not None:
+                diag = math.mtimes(Phi_T, F)
+                for ri, oi in ri_info:
+                    for rj, oj in ri_info:
+                        blocks[ri][rj] = diag[
+                            ..., oi : oi + sizes[ri], oj : oj + sizes[rj]
+                        ]
 
             current = idx
             F_path = F
             while current != root_idx:
                 parent = parent_indices[current]
                 F_path = math.mtimes(Xup_T[current], F_path)
-                rj = block_index(parent)
-                if rj is None:
+                rj_info = block_info(parent)
+                if rj_info is None:
                     current = parent
                     continue
-                Bij = math.mtimes(math.swapaxes(F_path, -2, -1), Phi[parent])
-                if ri is None:
+                Bij_full = math.mtimes(math.swapaxes(F_path, -2, -1), Phi[parent])
+                if ri_info is None:
                     current = parent
                     continue
-                blocks[ri][rj] = Bij
-                blocks[rj][ri] = math.swapaxes(Bij, -2, -1)
+                for ri, oi in ri_info:
+                    for rj, oj in rj_info:
+                        sub = Bij_full[..., oi : oi + sizes[ri], oj : oj + sizes[rj]]
+                        blocks[ri][rj] = sub
+                        blocks[rj][ri] = math.swapaxes(sub, -2, -1)
                 current = parent
 
         row_tensors = []
@@ -206,14 +217,17 @@ class RBDAlgorithms:
         )
 
         zero_col = math.factory.zeros(batch_shape + (6, 1))
+        joint_local_dof = self._joint_index_to_local_dof
         joint_cols = []
         for jidx in range(n):
             node_idx = joint_to_node.get(jidx)
             if node_idx is not None:
-                col = math.mtimes(
+                full_col = math.mtimes(
                     math.swapaxes(X_G[node_idx], -2, -1),
                     math.mtimes(Ic_comp[node_idx], Phi[node_idx]),
                 )
+                local = joint_local_dof.get(jidx, 0)
+                col = full_col[..., :, local : local + 1]
             else:
                 col = zero_col
             joint_cols.append(col)
@@ -547,8 +561,8 @@ class RBDAlgorithms:
             a = a + self.math.vxs(J_dot_j, q_dot)
 
             if joint.idx is not None:
-                cols[joint.idx] = J_j
-                cols_dot[joint.idx] = J_dot_j
+                self._scatter_cols(cols, joint.idx, J_j)
+                self._scatter_cols(cols_dot, joint.idx, J_dot_j)
 
         zero_col = self.math.factory.zeros(batch_size + (6, 1))
         cols = [zero_col if c is None else c for c in cols]
@@ -829,7 +843,8 @@ class RBDAlgorithms:
             else:
                 joint_idx = joint_indices[idx]
                 if joint_idx is not None:
-                    tau_joint_cols[joint_idx] = math.mxv(Phi_T, Fi)
+                    tau_val = math.mxv(Phi_T, Fi)
+                    self._scatter_entries(tau_joint_cols, joint_idx, tau_val)
                 parent = parent_indices[idx]
                 if parent >= 0:
                     f[parent] = f[parent] + math.mxv(
@@ -1035,8 +1050,12 @@ class RBDAlgorithms:
                 U_i = math.mtimes(IA[idx], Si)
                 d_i = math.mtimes(math.swapaxes(Si, -2, -1), U_i)
                 joint_idx = joint_indices[idx]
-                tau_vec = joint_torques_eff[..., joint_idx]
-                Si_T_pA = math.mxv(math.swapaxes(Si, -2, -1), pA[idx])[..., 0]
+                if isinstance(joint_idx, tuple):
+                    tau_slice = slice(joint_idx[0], joint_idx[-1] + 1)
+                else:
+                    tau_slice = slice(joint_idx, joint_idx + 1)
+                tau_vec = joint_torques_eff[..., tau_slice]
+                Si_T_pA = math.mxv(math.swapaxes(Si, -2, -1), pA[idx])
                 u_i = tau_vec - Si_T_pA
 
                 d_list[idx] = d_i
@@ -1080,14 +1099,15 @@ class RBDAlgorithms:
 
             if Si is not None and joint_idx is not None:
                 U_i = U_list[idx]
-                U_T_rel_acc = math.mxv(math.swapaxes(U_i, -2, -1), rel_acc)[..., 0]
+                U_T_rel_acc = math.mxv(math.swapaxes(U_i, -2, -1), rel_acc)
                 num = u_list[idx] - U_T_rel_acc
                 inv_d = inv_d_list[idx]
                 num_expanded = expand_to_match(num, inv_d)
                 gain_qdd = math.mtimes(inv_d, num_expanded)
                 qdd_col = gain_qdd[..., 0]
-                if joint_idx < n:
-                    qdd_entries[joint_idx] = qdd_col
+                max_idx = max(joint_idx) if isinstance(joint_idx, tuple) else joint_idx
+                if max_idx < n:
+                    self._scatter_entries(qdd_entries, joint_idx, qdd_col)
                 a_correction_vec = math.mxv(Si, qdd_col)
                 a[idx] = a_pre + a_correction_vec
             else:
@@ -1223,11 +1243,34 @@ class RBDAlgorithms:
                 continue
             L_H_j = L_H_B @ B_H_j
             S = joint.motion_subspace()
-            cols[joint.idx] = self.math.adjoint(L_H_j) @ S
+            J_block = self.math.adjoint(L_H_j) @ S
+            self._scatter_cols(cols, joint.idx, J_block)
 
         zero_col = self.math.factory.zeros(batch_size + (6, 1))
         cols = [zero_col if col is None else col for col in cols]
         return self.math.concatenate(cols, axis=-1)
+
+    @staticmethod
+    def _scatter_cols(
+        cols: list, idx: int | tuple[int, ...], block: npt.ArrayLike
+    ) -> None:
+        """Assign columns of *block* to *cols* at the DOF positions given by *idx*."""
+        if isinstance(idx, tuple):
+            for i, j in enumerate(idx):
+                cols[j] = block[..., :, i : i + 1]
+        else:
+            cols[idx] = block
+
+    @staticmethod
+    def _scatter_entries(
+        entries: list, idx: int | tuple[int, ...], vec: npt.ArrayLike
+    ) -> None:
+        """Assign elements of *vec* to *entries* at the DOF positions given by *idx*."""
+        if isinstance(idx, tuple):
+            for i, j in enumerate(idx):
+                entries[j] = vec[..., i : i + 1]
+        else:
+            entries[idx] = vec
 
     def _default_joint_value(
         self, joint_positions: npt.ArrayLike, fallback: npt.ArrayLike | None = None
@@ -1266,11 +1309,14 @@ class RBDAlgorithms:
         self._node_indices = tuple(range(node_count))
         self._rev_node_indices = tuple(reversed(self._node_indices))
         self._parent_indices = [-1] * node_count
-        self._joint_indices_per_node: list[int | None] = [None] * node_count
+        self._joint_indices_per_node: list[int | tuple[int, ...] | None] = [
+            None
+        ] * node_count
         self._motion_subspaces: list[npt.ArrayLike] = [None] * node_count
         self._spatial_inertias: list[npt.ArrayLike] = [None] * node_count
         self._joints_per_node: list[Joint | None] = [None] * node_count
         self._joint_index_to_node: dict[int, int] = {}
+        self._joint_index_to_local_dof: dict[int, int] = {}
         self._joint_by_child: dict[str, Joint] = {}
         self._joint_chain_cache: dict[str, tuple[Joint, ...]] = {
             self.root_link: tuple()
@@ -1293,7 +1339,13 @@ class RBDAlgorithms:
                 self._motion_subspaces[idx] = joint.motion_subspace()
                 self._joint_indices_per_node[idx] = joint.idx
                 if joint.idx is not None:
-                    self._joint_index_to_node[int(joint.idx)] = idx
+                    if isinstance(joint.idx, tuple):
+                        for local, global_idx in enumerate(joint.idx):
+                            self._joint_index_to_node[global_idx] = idx
+                            self._joint_index_to_local_dof[global_idx] = local
+                    else:
+                        self._joint_index_to_node[int(joint.idx)] = idx
+                        self._joint_index_to_local_dof[int(joint.idx)] = 0
 
         for joint in self.model.joints.values():
             self._joint_by_child[joint.child] = joint

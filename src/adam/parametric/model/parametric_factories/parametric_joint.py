@@ -35,6 +35,14 @@ class ParametricJoint(Joint):
         )
         self.offset = joint_offset
         self.origin = self.modify(self.parent_parametric.link_offset)
+        self.dofs = self._infer_dofs()
+
+    def _infer_dofs(self) -> int:
+        if self.type == "fixed":
+            return 0
+        if self.type == "spherical":
+            return 3
+        return 1
 
     def _set_axis(self, axis: npt.ArrayLike) -> npt.ArrayLike:
         """
@@ -118,6 +126,12 @@ class ParametricJoint(Joint):
                 self.axis,
                 q,
             )
+        elif self.type in ["spherical"]:
+            return self.math.H_spherical_joint(
+                self.origin.xyz,
+                self.origin.rpy,
+                q,
+            )
 
     def spatial_transform(self, q: npt.ArrayLike) -> npt.ArrayLike:
         """
@@ -140,6 +154,12 @@ class ParametricJoint(Joint):
                 self.axis,
                 q,
             )
+        elif self.type in ["spherical"]:
+            return self.math.X_spherical_joint(
+                self.origin.xyz,
+                self.origin.rpy,
+                q,
+            )
 
     def motion_subspace(self) -> npt.ArrayLike:
         """
@@ -159,3 +179,7 @@ class ParametricJoint(Joint):
             axis = self.axis
             z = self.math.zeros(1)
             return self.math.vertcat(axis[0], axis[1], axis[2], z, z, z)
+        elif self.type in ["spherical"]:
+            zeros = self.math.zeros(3, 3)
+            eye = self.math.eye(3)
+            return self.math.vertcat(zeros, eye)

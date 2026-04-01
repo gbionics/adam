@@ -60,10 +60,23 @@ class Model:
                 )
 
         # set idx to the actuated joints
-        for [idx, joint_str] in enumerate(joints_name_list):
+        current_pos_idx = 0
+        for joint_str in joints_name_list:
             for joint in joints_list:
-                if joint.name == joint_str:
-                    joint.idx = idx
+                if joint.name != joint_str:
+                    continue
+                dofs = getattr(joint, "dofs", None)
+                if dofs is None:
+                    dofs = 1
+                if joint.type == "fixed" or dofs == 0:
+                    joint.idx = None
+                    dofs = 0
+                elif dofs == 1:
+                    joint.idx = current_pos_idx
+                else:
+                    joint.idx = tuple(range(current_pos_idx, current_pos_idx + dofs))
+                current_pos_idx += dofs
+                break
 
         tree = Tree.build_tree(links=links_list, joints=joints_list)
 
@@ -78,7 +91,7 @@ class Model:
             frames=frames,
             joints=joints,
             tree=tree,
-            NDoF=len(joints_name_list),
+            NDoF=current_pos_idx,
             actuated_joints=joints_name_list,
         )
 

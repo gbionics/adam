@@ -4,12 +4,14 @@ import warnings
 
 import casadi as cs
 import numpy as np
+import idyntree.bindings as iDynTree
 
 from adam.casadi.casadi_like import SpatialMath
 from adam.core import RBDAlgorithms
 from adam.core.constants import Representations
 from adam.model import Model, build_model_factory
 from adam.model.kindyn_mixin import KinDynFactoryMixin
+from adam.model.conversions import from_idyntree_model
 
 
 class KinDynComputations(KinDynFactoryMixin):
@@ -22,6 +24,7 @@ class KinDynComputations(KinDynFactoryMixin):
         root_link: str = None,
         gravity: np.array = np.array([0.0, 0.0, -9.80665, 0.0, 0.0, 0.0]),
         f_opts: dict = dict(jit=False, jit_options=dict(flags="-Ofast"), cse=True),
+        convert_revolute_to_spherical: bool = False,
     ) -> None:
         """
         Args:
@@ -29,10 +32,33 @@ class KinDynComputations(KinDynFactoryMixin):
                 NOTE: The parameter name `urdfstring` is deprecated and will be renamed to `model` in a future release.
             joints_name_list (list): list of the actuated joints
             root_link (str, optional): Deprecated. The root link is automatically chosen as the link with no parent in the URDF. Defaults to None.
+            convert_revolute_to_spherical (bool, optional): If True, converts revolute joints to spherical joints. Defaults to False.
         """
         math = SpatialMath()
-        factory = build_model_factory(description=urdfstring, math=math)
-        model = Model.build(factory=factory, joints_name_list=joints_name_list)
+        # if convert_revolute_to_spherical:
+        #     model_loader = iDynTree.ModelLoader()
+        #     options = model_loader.parsingOptions()
+        #     options.convertThreeRevoluteJointsToSphericalJoint = (
+        #         convert_revolute_to_spherical
+        #     )
+        #     model_loader.setParsingOptions(options)
+        #     model_loader.loadReducedModelFromFile(str(urdfstring), joints_name_list)
+        #     model_idy = model_loader.model()
+        #     model = from_idyntree_model(model_idy, math=math)
+        # else:
+        #     factory = build_model_factory(description=urdfstring, math=math)
+        #     model = Model.build(factory=factory, joints_name_list=joints_name_list)
+
+        model_loader = iDynTree.ModelLoader()
+        options = model_loader.parsingOptions()
+        options.convertThreeRevoluteJointsToSphericalJoint = (
+            convert_revolute_to_spherical
+        )
+        model_loader.setParsingOptions(options)
+        model_loader.loadReducedModelFromFile(str(urdfstring), joints_name_list)
+        model_idyntree = model_loader.model()
+        model = from_idyntree_model(model_idyntree, math=math)
+
         self.rbdalgos = RBDAlgorithms(model=model, math=math)
         self.NDoF = self.rbdalgos.NDoF
         self.g = gravity

@@ -380,12 +380,15 @@ class SpatialMath(_SpatialMath):
     def vxs(v: CasadiLike, c: CasadiLike) -> CasadiLike:
         """
         Vector times scalar multiplication for CasADi.
+        For multi-DOF joints (v has more than 1 column), performs matrix multiply.
 
         Args:
-            v: Vector (CasadiLike)
-            c: Scalar (CasadiLike)
+            v: Vector or matrix (CasadiLike)
+            c: Scalar or vector (CasadiLike)
 
         Returns:
-            CasadiLike: Result of vector times scalar
+            CasadiLike: Result of v * c (1-DOF) or v @ c (multi-DOF)
         """
+        if v.array.shape[1] > 1:
+            return CasadiLike(cs.mtimes(v.array, c.array))
         return CasadiLike(v.array * c.array)
