@@ -23,5 +23,4 @@ dependencies:
   - liecasadi
   - mujoco
   - robot_descriptions
-  - pip:
-    - urdf-usd-converter
+  - urdf-usd-converter
