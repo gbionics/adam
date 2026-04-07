@@ -370,6 +370,16 @@ robot.update(w_H_b, q)
 robot.add_joint_sliders(folder_name="iCub")
 ```
 
+With other model sources, only the loader changes:
+
+```python
+# MuJoCo
+kindyn = KinDynComputations.from_mujoco_model(mj_model)
+
+# USD
+kindyn = KinDynComputations.from_usd("robot.usda", robot_prim_path="/Robot")
+```
+
 Examples are available in:
 
 - `examples/visualize_icub.py`
