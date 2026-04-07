@@ -36,6 +36,9 @@ pip install adam-robotics[mujoco]
 # OpenUSD support
 pip install adam-robotics[usd]
 
+# Visualization support
+pip install adam-robotics[visualization]
+
 # All backends
 pip install adam-robotics[all]
 ```
@@ -64,7 +67,7 @@ conda create -n adamenv -c conda-forge adam-robotics-all
 ```bash
 git clone https://github.com/ami-iit/adam.git
 cd adam
-pip install .[jax]  # or [casadi], [pytorch], [mujoco], [usd], [all]
+pip install .[jax]  # or [casadi], [pytorch], [mujoco], [usd], [visualization], [all]
 ```
 
 ## 🚀 Quick Start
@@ -336,6 +339,44 @@ M = kinDyn.mass_matrix(w_H_b, q)
 com = kinDyn.CoM_position(w_H_b, q)
 ```
 
+### Visualization
+
+adam also provides a lightweight visualization layer based on [viser](https://viser.studio/).
+It works with the same normalized model API, so URDF, MuJoCo, and USD models can all be rendered through the same interface.
+
+```python
+import numpy as np
+import icub_models
+from adam.numpy import KinDynComputations
+from adam.visualization import Visualizer
+
+kindyn = KinDynComputations.from_urdf(
+    icub_models.get_model_file("iCubGazeboV2_5")
+)
+
+visualizer = Visualizer(
+    world_axes=True,
+    ground=True,
+    camera_position=(2.5, -2.0, 1.5),
+    camera_look_at=(0.0, 0.0, 0.6),
+)
+
+robot = visualizer.add_model(kindyn, root_name="/icub")
+
+w_H_b = np.eye(4)
+w_H_b[2, 3] = 0.6
+q = np.zeros(kindyn.NDoF)
+robot.update(w_H_b, q)
+robot.add_joint_sliders(folder_name="iCub")
+```
+
+Examples are available in:
+
+- `examples/visualize_icub.py`
+- `examples/visualize_mujoco.py`
+- `examples/visualize_usd.py`
+- `examples/visualize_multi_robot.py`
+
 ### Inverse Kinematics
 
 ```python
@@ -373,6 +414,7 @@ print("Joint values:\n", q_sol)
 - **Differentiation**: Get gradients, Jacobians, and Hessians automatically
 - **Symbolic**: Build computation graphs with CasADi for optimization
 - **Batched**: Process multiple configurations in parallel with PyTorch
+- **Visualization**: Render URDF, MuJoCo, and USD robot models with viser
 
 ## 📖 Documentation
 
