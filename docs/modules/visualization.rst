@@ -20,3 +20,11 @@ adam.visualization.viser module
    :members:
    :undoc-members:
    :show-inheritance:
+
+adam.visualization.cli module
+-----------------------------
+
+.. automodule:: adam.visualization.cli
+   :members:
+   :undoc-members:
+   :show-inheritance:

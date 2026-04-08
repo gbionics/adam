@@ -53,6 +53,20 @@ Create a scene-level ``Visualizer`` and add a robot model to it:
 ``Visualizer`` owns the shared viser scene. ``add_model()`` returns a ``ModelHandle``
 for one robot instance in that scene.
 
+Command-Line Viewer
+-------------------
+
+If you just want to inspect a model quickly, use the bundled ``adam-model-view`` command:
+
+.. code-block:: bash
+
+    adam-model-view --urdf path/to/robot.urdf
+    adam-model-view --mujoco path/to/model.xml
+    adam-model-view --usd path/to/robot.usda --robot-prim-path /Robot
+
+The viewer loads the requested model, starts a viser server, adds a default ground plane,
+and exposes one joint-slider panel per robot when the model has actuated joints.
+
 Joint Sliders
 -------------
 

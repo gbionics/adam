@@ -344,6 +344,14 @@ com = kinDyn.CoM_position(w_H_b, q)
 adam also provides a lightweight visualization layer based on [viser](https://viser.studio/).
 It works with the same normalized model API, so URDF, MuJoCo, and USD models can all be rendered through the same interface.
 
+For quick inspection from the terminal, use the bundled viewer command:
+
+```bash
+adam-model-view --urdf path/to/robot.urdf
+adam-model-view --mujoco path/to/model.xml
+adam-model-view --usd path/to/robot.usda --robot-prim-path /Robot
+```
+
 ```python
 import numpy as np
 import icub_models
