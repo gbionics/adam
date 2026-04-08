@@ -326,6 +326,9 @@ class ModelHandle:
         return max(span / 200.0, 1e-3)
 
     def _link_frame_name(self, link_name: str) -> str:
+        return f"{self.root_name}/frames/{link_name}"
+
+    def _link_visual_root_name(self, link_name: str) -> str:
         return f"{self.root_name}/{link_name}"
 
     def _visual_name(self, link_name: str, visual_index: int, name: str | None) -> str:
@@ -343,7 +346,7 @@ class ModelHandle:
                 if visual.name == name
             )
             suffix = name if duplicate_count == 1 else f"{name}_{visual_index}"
-        return f"{self._link_frame_name(link_name)}/{suffix}"
+        return f"{self._link_visual_root_name(link_name)}/{suffix}"
 
     def _add_visual_node(self, link_name: str, visual: Visual, visual_index: int):
         rgba = visual.material.rgba if visual.material is not None else None
