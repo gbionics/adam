@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import time
+
 """
 Load an iCub model with ADAM and visualize it with viser.
 
