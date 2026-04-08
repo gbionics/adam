@@ -65,6 +65,9 @@ all = ["jax", "jaxlib", "casadi>=3.6", "torch", "viser", "trimesh"]
 "Documentation" = "https://adam-robotics.readthedocs.io/en/latest/"
 "Source" = "https://github.com/ami-iit/adam"
 
+[project.scripts]
+adam-model-view = "adam.visualization.cli:main"
+
 [tool.setuptools_scm]
 local_scheme = "dirty-tag"
 
