@@ -289,6 +289,12 @@ class USDModelFactory(ModelFactory):
                 and prim.GetPath().HasPrefix(robot_path)
             }
         else:
+            # Some USD layouts apply ArticulationRootAPI to the root link prim
+            # itself, with the other rigid bodies as siblings under the parent
+            # Xform rather than descendants of the root link. We therefore
+            # broaden the candidate search one level up, then keep only the
+            # rigid bodies that are actually joint-connected to the seed link
+            # to avoid pulling in unrelated sibling articulations.
             scope_path = robot_path.GetParentPath()
             candidate_paths = {
                 str(prim.GetPath())
