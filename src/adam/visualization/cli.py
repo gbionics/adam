@@ -207,6 +207,9 @@ def create_view(args: argparse.Namespace) -> ViewSession:
         kindyn,
         root_name=root_name,
         show_frames=args.show_frames,
+        axes_length=0.08,
+        axes_radius=0.004,
+        origin_radius=0.01,
     )
 
     base_transform = np.eye(4)
