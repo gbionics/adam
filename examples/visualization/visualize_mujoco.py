@@ -3,7 +3,7 @@ Load the Unitree G1 MuJoCo model with ADAM and visualize it with viser.
 
 Usage
 -----
-    PYTHONPATH=src python3 examples/visualize_mujoco.py
+    PYTHONPATH=src python3 examples/visualization/visualize_mujoco.py
 
 Dependencies
 ------------

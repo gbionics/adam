@@ -336,7 +336,7 @@ class ModelHandle:
         else:
             # Count how many visuals in this link share the same name.
             # If the name is unique, use it as-is; if duplicates exist,
-            # append the index to disambiguate (e.g. "arm_1", "arm_2").
+            # append the index to disambiguate (e.g. "arm_0", "arm_1").
             duplicate_count = sum(
                 1
                 for visual in self._visuals_by_link.get(link_name, ())

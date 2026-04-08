@@ -3,7 +3,7 @@ Load an iCub model with ADAM and visualize it with viser.
 
 Usage
 -----
-    PYTHONPATH=src python3 examples/visualize_icub.py
+    PYTHONPATH=src python3 examples/visualization/visualize_urdf.py
 
 Dependencies
 ------------
@@ -14,7 +14,17 @@ from __future__ import annotations
 
 import argparse
 import time
+"""
+Load an iCub model with ADAM and visualize it with viser.
 
+Usage
+-----
+    PYTHONPATH=src python3 examples/visualization/visualize_urdf.py
+
+Dependencies
+------------
+pip install icub-models viser trimesh
+"""
 import numpy as np
 
 try:

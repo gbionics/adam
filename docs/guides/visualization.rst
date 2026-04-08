@@ -99,10 +99,10 @@ Examples
 
 The repository includes ready-to-run examples:
 
-- ``examples/visualize_icub.py``
-- ``examples/visualize_mujoco.py``
-- ``examples/visualize_usd.py``
-- ``examples/visualize_multi_robot.py``
+- ``examples/visualization/visualize_urdf.py``
+- ``examples/visualization/visualize_mujoco.py``
+- ``examples/visualization/visualize_usd.py``
+- ``examples/visualization/visualize_multi_robot.py``
 
 See Also
 --------

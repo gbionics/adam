@@ -382,10 +382,10 @@ kindyn = KinDynComputations.from_usd("robot.usda", robot_prim_path="/Robot")
 
 Examples are available in:
 
-- `examples/visualize_icub.py`
-- `examples/visualize_mujoco.py`
-- `examples/visualize_usd.py`
-- `examples/visualize_multi_robot.py`
+- `examples/visualization/visualize_mujoco.py`
+- `examples/visualization/visualize_usd.py`
+- `examples/visualization/visualize_multi_robot.py`
+- `examples/visualization/visualize_urdf.py`
 
 ### Inverse Kinematics
 

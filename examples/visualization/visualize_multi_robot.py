@@ -3,7 +3,7 @@ Load iCub, StickBot, iCub-from-USD, Unitree G1, and Aliengo into one shared vise
 
 Usage
 -----
-    PYTHONPATH=src python3 examples/visualize_multi_robot.py
+    PYTHONPATH=src python3 examples/visualization/visualize_multi_robot.py
 
 Dependencies
 ------------

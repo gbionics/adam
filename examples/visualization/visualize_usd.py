@@ -3,8 +3,8 @@ Load a USD robot model with ADAM and visualize it with viser.
 
 Usage
 -----
-    PYTHONPATH=src python3 examples/visualize_usd.py
-    PYTHONPATH=src python3 examples/visualize_usd.py --usd-path /path/to/robot.usda
+    PYTHONPATH=src python3 examples/visualization/visualize_usd.py
+    PYTHONPATH=src python3 examples/visualization/visualize_usd.py --usd-path /path/to/robot.usda
 
 Dependencies
 ------------
