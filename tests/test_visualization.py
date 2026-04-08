@@ -283,7 +283,19 @@ def test_visualizer_builds_scene_and_updates_link_frames(fake_viser):
     frame_calls = [
         call for call in visualizer.server.scene.calls if call[0] == "add_frame"
     ]
-    assert [call[1] for call in frame_calls] == ["/robot/base", "/robot/link1"]
+    assert [call[1] for call in frame_calls] == [
+        "/robot/frames/base",
+        "/robot/frames/link1",
+    ]
+    visual_calls = [
+        call
+        for call in visualizer.server.scene.calls
+        if call[0] in {"add_box", "add_cylinder", "add_icosphere", "add_mesh_simple"}
+    ]
+    assert [call[1] for call in visual_calls] == [
+        "/robot/base/visual_0",
+        "/robot/link1/visual_0",
+    ]
     assert visualizer.server.scene.world_axes.visible is True
     assert visualizer.server.initial_camera.position == (2.0, -2.0, 1.0)
     assert visualizer.server.initial_camera.look_at == (0.0, 0.0, 0.5)
