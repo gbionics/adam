@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pathlib
 
-DEFAULT_STICKBOT_URDF = pathlib.Path(__file__).resolve().parent.parent / "stickbot.urdf"
+DEFAULT_STICKBOT_URDF = pathlib.Path(__file__).resolve().parents[2] / "stickbot.urdf"
 STICKBOT_URL = (
     "https://raw.githubusercontent.com/"
     "icub-tech-iit/ergocub-gazebo-simulations/"
@@ -27,21 +27,14 @@ def convert_urdf_to_usd(
     urdf_path: str | pathlib.Path,
     output_dir: str | pathlib.Path,
 ) -> pathlib.Path:
-    try:
-        import urdf_usd_converter
-    except Exception as exc:  # pragma: no cover - optional dependency
-        raise SystemExit(
-            "This example needs 'urdf-usd-converter'. "
-            "Install with: pip install urdf-usd-converter"
-        ) from exc
+    from urdf_usd_converter import Converter
 
     resolved_urdf_path = pathlib.Path(urdf_path).expanduser().resolve()
     resolved_output_dir = pathlib.Path(output_dir).expanduser().resolve()
     resolved_output_dir.mkdir(parents=True, exist_ok=True)
 
-    converter = urdf_usd_converter.Converter()
-    asset = converter.convert(
+    asset = Converter().convert(
         str(resolved_urdf_path),
-        str(resolved_output_dir / resolved_urdf_path.stem),
+        str(resolved_output_dir),
     )
     return pathlib.Path(asset.path).resolve()
