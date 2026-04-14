@@ -39,7 +39,7 @@ jax = ["jax<=0.6.0", "jaxlib"]
 casadi = ["casadi", "liecasadi"]
 pytorch = ["torch", "jax", "jaxlib"]
 mujoco = ["mujoco"]
-usd = ["usd-core"]
+usd = ["usd-core", "trimesh"]
 visualization = ["viser", "trimesh"]
 test = [
   "jax<=0.6.0",

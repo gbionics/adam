@@ -153,7 +153,7 @@ def _load_mesh_vertices_faces(mesh_filename: str) -> tuple[np.ndarray, np.ndarra
     except ImportError as exc:  # pragma: no cover - exercised in environments without trimesh
         raise ImportError(
             "Mesh visual export requires the optional dependency 'trimesh'. "
-            "Install it with `pip install adam-robotics[visualization]`."
+            "Install it with `pip install adam-robotics[usd]`."
         ) from exc
 
     mesh = trimesh.load(mesh_filename, force="mesh")
