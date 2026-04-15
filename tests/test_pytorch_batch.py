@@ -409,6 +409,16 @@ def test_fk(setup_test):
     assert not torch.allclose(adam_H[0], adam_H[1], atol=1e-6)
 
 
+def test_link_poses(setup_test):
+    adam_kin_dyn, _robot_cfg, state, batch_size = setup_test
+    link_poses = adam_kin_dyn.link_poses(state.H, state.joints_pos)
+    link_name = next(iter(link_poses))
+    adam_H = adam_kin_dyn.forward_kinematics(link_name, state.H, state.joints_pos)
+
+    assert link_poses[link_name].shape == (batch_size, 4, 4)
+    assert torch.allclose(link_poses[link_name], adam_H, atol=1e-6)
+
+
 def test_fk_non_actuated(setup_test):
     adam_kin_dyn, robot_cfg, state, batch_size = setup_test
     adam_H = adam_kin_dyn.forward_kinematics("head", state.H, state.joints_pos)

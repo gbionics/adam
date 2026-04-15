@@ -111,6 +111,26 @@ class KinDynComputations(KinDynFactoryMixin):
             )
         ).array
 
+    def link_poses(
+        self, base_transform: torch.Tensor, joint_positions: torch.Tensor
+    ) -> dict[str, torch.Tensor]:
+        """Return root-to-link transforms for the whole model.
+
+        Args:
+            base_transform (torch.Tensor): Homogenous transform from base to world
+            joint_positions (torch.Tensor): The joints position
+
+        Returns:
+            dict[str, torch.Tensor]: Link poses as homogenous transformation matrices
+        """
+        return {
+            name: transform.array
+            for name, transform in self.rbdalgos.link_poses(
+                base_transform,
+                joint_positions,
+            ).items()
+        }
+
     def jacobian(
         self,
         frame: str,
