@@ -51,7 +51,7 @@ Create a scene-level ``Visualizer`` and add a robot model to it:
     robot.update(w_H_b, q)
 
 ``Visualizer`` owns the shared viser scene. ``add_model()`` returns a ``ModelHandle``
-for one robot instance in that scene.
+for one robot model in that scene.
 
 Command-Line Viewer
 -------------------
@@ -96,6 +96,39 @@ One ``Visualizer`` can host multiple robot models:
 
 Each model gets its own root in the scene graph and can expose its own slider panel.
 
+Batched Robots
+--------------
+
+One ``ModelHandle`` can also render many instances of the same robot by passing
+``num_instances`` to ``add_model()``:
+
+.. code-block:: python
+
+    num_instances = 16
+    robot = visualizer.add_model(
+        kindyn,
+        root_name="/g1_batch",
+        num_instances=num_instances,
+    )
+
+    w_H_b = np.repeat(np.eye(4)[None, :, :], num_instances, axis=0)
+    q = np.zeros((num_instances, kindyn.NDoF))
+    robot.update(w_H_b, q)
+
+The batched path uses viser batched meshes and expects base transforms with shape
+``(B, 4, 4)`` and joint positions with shape ``(B, N)``. Frames and joint sliders
+are scalar-model conveniences and are not enabled for batched models.
+
+The repository includes a ready-to-run G1 MuJoCo batch example:
+
+.. code-block:: bash
+
+    PYTHONPATH=src python3 examples/visualization/visualize_g1_batch.py
+
+The example animates ``left_hip_pitch_joint`` by default with a phase offset per
+instance. Use ``--no-animate`` to disable the motion or ``--joint-name`` to choose
+another actuated joint.
+
 Supported Model Sources
 -----------------------
 
@@ -115,6 +148,7 @@ The repository includes ready-to-run examples:
 
 - ``examples/visualization/visualize_urdf.py``
 - ``examples/visualization/visualize_mujoco.py``
+- ``examples/visualization/visualize_g1_batch.py``
 - ``examples/visualization/visualize_usd.py``
 - ``examples/visualization/visualize_multi_robot.py``
 

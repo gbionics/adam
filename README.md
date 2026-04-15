@@ -388,9 +388,38 @@ kindyn = KinDynComputations.from_mujoco_model(mj_model)
 kindyn = KinDynComputations.from_usd("robot.usda", robot_prim_path="/Robot")
 ```
 
+Batched visualization is available through the same `ModelHandle` API by passing
+`num_instances` to `add_model()`. The model is rendered with viser batched meshes,
+and each `update()` call accepts base transforms with shape `(B, 4, 4)` and joint
+positions with shape `(B, N)`:
+
+```python
+num_instances = 16
+robot = visualizer.add_model(
+    kindyn,
+    root_name="/g1_batch",
+    num_instances=num_instances,
+)
+
+w_H_b = np.repeat(np.eye(4)[None, :, :], num_instances, axis=0)
+q = np.zeros((num_instances, kindyn.NDoF))
+robot.update(w_H_b, q)
+```
+
+For a ready-to-run MuJoCo example with a batch of Unitree G1 robots:
+
+```bash
+python examples/visualization/visualize_g1_batch.py
+```
+
+The batched example animates `left_hip_pitch_joint` by default with a phase offset
+per instance. Frames and joint sliders are scalar-model conveniences and are not
+enabled for batched models.
+
 Examples are available in:
 
 - `examples/visualization/visualize_mujoco.py`
+- `examples/visualization/visualize_g1_batch.py`
 - `examples/visualization/visualize_usd.py`
 - `examples/visualization/visualize_multi_robot.py`
 - `examples/visualization/visualize_urdf.py`
