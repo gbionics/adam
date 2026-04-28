@@ -17,6 +17,7 @@ except ImportError:  # pragma: no cover - optional dependency
     viser = None
 
 from adam.model.abc_factories import Pose
+from adam.model.kindyn_mixin import KinDynFactoryMixin
 from adam.model.visuals import (
     BoxVisualGeometry,
     CylinderVisualGeometry,
@@ -77,16 +78,6 @@ def _normalize_rgba(
     return rgb, None if alpha >= 0.999 else alpha
 
 
-def _extract_model(kindyn: Any):
-    if hasattr(kindyn, "model"):
-        return kindyn.model
-    if hasattr(kindyn, "rbdalgos") and hasattr(kindyn.rbdalgos, "model"):
-        return kindyn.rbdalgos.model
-    raise TypeError(
-        "Visualizer expects a KinDynComputations-like object exposing `model` "
-        "and `link_poses()`."
-    )
-
 
 def _normalize_node_name(root_name: str) -> str:
     if not root_name.startswith("/"):
@@ -108,7 +99,7 @@ class ModelHandle:
     def __init__(
         self,
         visualizer: Visualizer,
-        kindyn: Any,
+        kindyn: KinDynFactoryMixin,
         *,
         root_name: str,
         base_transform: Any | None = None,
@@ -121,7 +112,7 @@ class ModelHandle:
     ) -> None:
         self.visualizer = visualizer
         self.kindyn = kindyn
-        self.model = _extract_model(kindyn)
+        self.model = kindyn.model
         self.root_name = _normalize_node_name(root_name)
         self.show_frames = show_frames
         self.axes_length = axes_length
@@ -551,7 +542,7 @@ class Visualizer:
     ) -> ModelHandle:
         if root_name is None:
             if name is None:
-                model = _extract_model(kindyn)
+                model = kindyn.model
                 name = getattr(model, "name", None) or f"model_{len(self._models)}"
             root_name = f"/{name}"
         normalized_root_name = _normalize_node_name(root_name)
