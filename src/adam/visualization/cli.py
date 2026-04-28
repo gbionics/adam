@@ -73,8 +73,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--host",
-        default="0.0.0.0",
-        help="Host interface for the viser server",
+        default="127.0.0.1",
+        help="Host interface for the viser server (default: 127.0.0.1; use 0.0.0.0 to bind all interfaces)",
     )
     parser.add_argument(
         "--port",

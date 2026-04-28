@@ -437,7 +437,7 @@ class Visualizer:
         kindyn: Any | None = None,
         *,
         server: Any | None = None,
-        host: str = "0.0.0.0",
+        host: str = "127.0.0.1",
         port: int = 8080,
         up_direction: str = "+z",
         world_axes: bool = False,
