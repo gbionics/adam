@@ -78,7 +78,6 @@ def _normalize_rgba(
     return rgb, None if alpha >= 0.999 else alpha
 
 
-
 def _normalize_node_name(root_name: str) -> str:
     if not root_name.startswith("/"):
         root_name = f"/{root_name}"
