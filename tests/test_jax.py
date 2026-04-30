@@ -15,7 +15,7 @@ def setup_test(tests_setup) -> KinDynComputations | RobotCfg | State:
         pytest.skip("root link parametrization tested in numpy and casadi only")
     adam_kin_dyn = KinDynComputations(
         robot_cfg.model_path,
-        robot_cfg.joints_name_list, 
+        robot_cfg.joints_name_list,
     )
     adam_kin_dyn.set_frame_velocity_representation(robot_cfg.velocity_representation)
     return adam_kin_dyn, robot_cfg, state

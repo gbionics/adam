@@ -138,7 +138,9 @@ def tests_setup(request) -> RobotCfg | State:
     kin_dyn.setFrameVelocityRepresentation(idyn_representation)
 
     if root_link is not None:
-        assert kin_dyn.setFloatingBase(root_link), f"setFloatingBase({root_link!r}) failed"
+        assert kin_dyn.setFloatingBase(
+            root_link
+        ), f"setFloatingBase({root_link!r}) failed"
 
     n_dof = len(joints_name_list)
     # base quantities
