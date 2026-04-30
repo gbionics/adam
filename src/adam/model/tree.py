@@ -198,7 +198,7 @@ class Tree(Iterable):
                 new_nodes[child_node.name].parent = new_nodes[name].link
                 new_nodes[child_node.name].parent_arc = joint
 
-        # Re-wire path edges in reverse direction using _ReversedJoint wrappers.
+        # Re-wire path edges in reverse direction using ReversedJoint wrappers.
         for i in range(len(path) - 1):
             # Original edge: parent=path[i+1], child=path[i]
             orig_joint = self.graph[path[i]].parent_arc
