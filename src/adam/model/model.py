@@ -28,12 +28,18 @@ class Model:
         return len(self.links)
 
     @staticmethod
-    def build(factory: ModelFactory, joints_name_list: list[str] = None) -> "Model":
+    def build(
+        factory: ModelFactory,
+        joints_name_list: list[str] = None,
+        root_link: str = None,
+    ) -> "Model":
         """generates the model starting from the list of joints and the links-joints factory
 
         Args:
             factory (ModelFactory): the factory that generates the links and the joints, starting from a description (eg. urdf)
             joints_name_list (list[str]): the list of the actuated joints
+            root_link (str, optional): the link to use as the floating base. When ``None``
+                the link with no parent in the model description is used.
 
         Returns:
             Model: the model describing the robot
@@ -66,6 +72,9 @@ class Model:
                     joint.idx = idx
 
         tree = Tree.build_tree(links=links_list, joints=joints_list)
+
+        if root_link is not None and root_link != tree.root:
+            tree = tree.reroot(root_link)
 
         # generate some useful dict
         joints: dict[str, Joint] = {joint.name: joint for joint in joints_list}
