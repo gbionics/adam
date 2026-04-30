@@ -135,6 +135,23 @@ class Tree(Iterable):
 
         Returns:
             Tree: a new tree with ``new_root`` as root.
+
+        Example:
+            Given a tree ``A → B → C → D`` (with ``E`` as a child of ``A``
+            and ``F`` as a child of ``D``) and ``A`` as root, rerooting at
+            ``C`` reverses the path ``[C, B, A]`` and leaves subtrees
+            hanging off the path (e.g. ``D``, ``E``, ``F``) unchanged::
+
+                Original (root=A):       Rerooted (root=C):
+                     A                        C
+                    / \\                      / \\
+                   B   E                    D   B    <- reversed joint
+                   |                        |   |
+                   C                        F   A    <- reversed joint
+                   |                            |
+                   D                            E    <- copied as-is
+                   |
+                   F
         """
         if new_root == self.root:
             return self
