@@ -377,7 +377,9 @@ def test_jacobian_dot(setup_test):
         vels = jnp.concatenate([base_vel, joints_vel], axis=1)
         return (jac_dot @ vels[..., jnp.newaxis]).squeeze(-1).sum()
 
-    # Skip gradient/variation checks when target frame is fixed to root (constant output)
+    # Note: when root_link == target frame, the output is constant and
+    # gradient/variation checks would fail.  This test skips non-default
+    # root_link configurations (see setup_test fixture).
     grad_fn = grad(jacobian_dot_nu_sum, argnums=(0, 1, 2, 3))
     try:
         grad_results = grad_fn(
