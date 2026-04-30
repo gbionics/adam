@@ -13,8 +13,12 @@ config.update("jax_enable_x64", True)
 @pytest.fixture(scope="module")
 def setup_test(tests_setup) -> tuple[KinDynComputations, RobotCfg, State, int]:
     robot_cfg, state = tests_setup
-
-    adam_kin_dyn = KinDynComputations(robot_cfg.model_path, robot_cfg.joints_name_list)
+    if robot_cfg.root_link is not None:
+        pytest.skip("root link parametrization tested in numpy and casadi only")
+    adam_kin_dyn = KinDynComputations(
+        robot_cfg.model_path,
+        robot_cfg.joints_name_list,
+    )
     adam_kin_dyn.set_frame_velocity_representation(robot_cfg.velocity_representation)
 
     # Create a smaller batch for validation tests
@@ -373,6 +377,7 @@ def test_jacobian_dot(setup_test):
         vels = jnp.concatenate([base_vel, joints_vel], axis=1)
         return (jac_dot @ vels[..., jnp.newaxis]).squeeze(-1).sum()
 
+    # Skip gradient/variation checks when target frame is fixed to root (constant output)
     grad_fn = grad(jacobian_dot_nu_sum, argnums=(0, 1, 2, 3))
     try:
         grad_results = grad_fn(
