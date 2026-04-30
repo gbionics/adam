@@ -12,6 +12,8 @@ from adam.numpy.numpy_like import SpatialMath
 @pytest.fixture(scope="module")
 def setup_test(tests_setup, tmp_path_factory) -> KinDynComputations | RobotCfg | State:
     robot_cfg, state = tests_setup
+    if robot_cfg.root_link is not None:
+        pytest.skip("root link parametrization tested in numpy and casadi only")
 
     out_dir = tmp_path_factory.mktemp("newton_usd")
 
