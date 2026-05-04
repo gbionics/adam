@@ -352,8 +352,11 @@ kinDyn.set_root_link("chest")
 
 adam re-roots the kinematic tree internally by reversing the joints along the path from the new root to the original URDF root. All dynamics quantities (mass matrix, Jacobians, bias forces, …) are then consistent with the new floating base. Results match iDynTree's `setFloatingBase` API.
 
+> [!IMPORTANT]
+> **Joint serialization is independent of the floating base.** The order of joints in the `joints` vector is fixed by `joints_name_list` at construction time and never changes — only the *base state* inputs (`w_H_b` and base velocity) reflect the new floating base.
+
 > [!NOTE]
-> The `root_link` must be a **link** (not a frame). In URDF models, frames defined as zero-mass fixed-joint children are not valid choices.
+> `root_link` must be a **link** name, not a frame name. Passing a frame name raises a `ValueError` listing valid link names. Frames remain valid as targets for forward kinematics and Jacobians.
 
 ### Inverse Kinematics
 

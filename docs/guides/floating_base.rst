@@ -71,6 +71,28 @@ numerically equivalent to iDynTree's ``setFloatingBase`` API.
     frames are represented as zero-mass fixed-joint children and are not valid
     floating bases.  Use the parent link of the frame instead.
 
+Joint serialization is independent of the floating base
+--------------------------------------------------------
+
+.. important::
+
+    Changing the root link **does not change the joint position / velocity
+    vector layout**.  The order of joints in ``joints`` (and the matching
+    ``joints_name_list``) is fixed at construction time and stays the same
+    regardless of which link is the floating base.
+
+    The user defines the joint ordering once and it never changes — only the
+    **base state** part of the inputs (``w_H_b`` and the base velocity)
+    reflects the new floating base.
+
+    Concretely, if you construct with::
+
+        kinDyn = KinDynComputations(urdf, ["joint_A", "joint_B"], root_link="l_ankle_2")
+
+    then ``joints[0]`` is always ``joint_A`` and ``joints[1]`` is always
+    ``joint_B``, even though the kinematic tree is now rooted at
+    ``l_ankle_2``.
+
 .. seealso::
 
     :doc:`concepts` — velocity representations and the floating-base state.
