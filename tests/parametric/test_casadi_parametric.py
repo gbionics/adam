@@ -12,6 +12,8 @@ def setup_test(tests_setup) -> KinDynComputationsParametric | RobotCfg | State:
     # skip the tests if the model is not the StickBot
     if robot_cfg.robot_name != "StickBot":
         pytest.skip("Skipping the test because the model is not StickBot")
+    if robot_cfg.root_link is not None:
+        pytest.skip("root link parametrization tested in numpy and casadi only")
     link_name_list = ["chest"]
     adam_kin_dyn = KinDynComputationsParametric(
         robot_cfg.model_path, robot_cfg.joints_name_list, link_name_list

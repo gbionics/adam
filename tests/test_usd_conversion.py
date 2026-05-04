@@ -12,6 +12,8 @@ def setup_test(
     tests_setup, tmp_path_factory
 ) -> tuple[KinDynComputations, KinDynComputations, RobotCfg, State]:
     robot_cfg, state = tests_setup
+    if robot_cfg.root_link is not None:
+        pytest.skip("root link parametrization tested in numpy and casadi only")
 
     out_dir = tmp_path_factory.mktemp(f"usd_{robot_cfg.robot_name}")
     usd_path = out_dir / f"{robot_cfg.robot_name}.usda"

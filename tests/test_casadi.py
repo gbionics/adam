@@ -9,7 +9,11 @@ from adam.casadi import KinDynComputations
 @pytest.fixture(scope="module")
 def setup_test(tests_setup) -> KinDynComputations | RobotCfg | State:
     robot_cfg, state = tests_setup
-    adam_kin_dyn = KinDynComputations(robot_cfg.model_path, robot_cfg.joints_name_list)
+    adam_kin_dyn = KinDynComputations(
+        robot_cfg.model_path,
+        robot_cfg.joints_name_list,
+        root_link=robot_cfg.root_link,
+    )
     adam_kin_dyn.set_frame_velocity_representation(robot_cfg.velocity_representation)
     return adam_kin_dyn, robot_cfg, state
 

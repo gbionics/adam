@@ -1,7 +1,56 @@
 import dataclasses
 from typing import Iterable, Iterator, Union
 
+import numpy.typing as npt
+
 from adam.model.abc_factories import Joint, Link
+
+
+class ReversedJoint(Joint):
+    """Reverses the direction of a joint for kinematic-tree re-rooting.
+
+    When re-rooting from ``new_root`` to the original root, each joint on
+    the path needs to carry the child from its *new* parent to its *new*
+    child (which are swapped with respect to the original).
+
+    Mathematical convention (same as in ``RBDAlgorithms``):
+    * ``spatial_transform(q)``  = ``adjoint_inverse(H(q))``
+    * ``homogeneous(q)``        = H(q)   (4x4 homogeneous transform parent→child)
+
+    For the reversed joint (new parent ← original child, new child ← original parent):
+    * ``H_rev(q)``     = ``H_orig(q)⁻¹``
+    * ``X_rev(q)``     = ``adjoint_inverse(H_rev(q))``
+                       = ``adjoint_inverse(H_orig(q)⁻¹)``
+                       = ``adjoint(H_orig(q))``
+    * ``S_rev``        = ``-adjoint(H_orig(0)) @ S_orig``   (constant, pre-computed)
+    """
+
+    def __init__(self, original: Joint) -> None:
+        self.math = original.math
+        self.name = original.name
+        self.parent = original.child  # swapped
+        self.child = original.parent  # swapped
+        self.type = original.type
+        self.axis = original.axis
+        self.origin = original.origin
+        self.limit = original.limit
+        self.idx = original.idx
+        self.original = original
+        # H(0) = H_from_Pos_RPY(origin.xyz, origin.rpy) for all joint types
+        # (revolute/prismatic offset and fixed transform coincide at q=0).
+        H0 = original.math.H_from_Pos_RPY(original.origin.xyz, original.origin.rpy)
+        S_orig = original.motion_subspace()
+        adj_H0 = original.math.adjoint(H0)
+        self._motion_subspace = -original.math.mtimes(adj_H0, S_orig)
+
+    def homogeneous(self, q: npt.ArrayLike) -> npt.ArrayLike:
+        return self.math.homogeneous_inverse(self.original.homogeneous(q))
+
+    def spatial_transform(self, q: npt.ArrayLike) -> npt.ArrayLike:
+        return self.math.adjoint(self.original.homogeneous(q))
+
+    def motion_subspace(self) -> npt.ArrayLike:
+        return self._motion_subspace
 
 
 @dataclasses.dataclass
@@ -72,6 +121,95 @@ class Tree(Iterable):
                 f"Expected only one root, found {len(root_link)}: {root_link}"
             )
         return Tree(nodes, root_link[0])
+
+    def reroot(self, new_root: str) -> "Tree":
+        """Return a new ``Tree`` rooted at ``new_root``.
+
+        Joints on the path from ``new_root`` to the original root are
+        wrapped in :class:`ReversedJoint` so that their parent/child
+        direction, spatial transform, and motion subspace are all consistent
+        with the new root.  All other joints are unchanged.
+
+        Args:
+            new_root (str): name of the link that should become the new root.
+
+        Returns:
+            Tree: a new tree with ``new_root`` as root.
+
+        Example:
+            Given a tree ``A → B → C → D`` (with ``E`` as a child of ``A``
+            and ``F`` as a child of ``D``) and ``A`` as root, rerooting at
+            ``C`` reverses the path ``[C, B, A]`` and leaves subtrees
+            hanging off the path (e.g. ``D``, ``E``, ``F``) unchanged::
+
+                Original (root=A):       Rerooted (root=C):
+                     A                        C
+                    / \\                      / \\
+                   B   E                    D   B    <- reversed joint
+                   |                        |   |
+                   C                        F   A    <- reversed joint
+                   |                            |
+                   D                            E    <- copied as-is
+                   |
+                   F
+        """
+        if new_root == self.root:
+            return self
+
+        if new_root not in self.graph:
+            raise ValueError(
+                f"{new_root!r} is not a link in the robot model. "
+                f"Available links: {list(self.graph)}"
+            )
+
+        # Build the path [new_root, ..., old_root] following parent pointers.
+        path: list[str] = []
+        current: str = new_root
+        while True:
+            path.append(current)
+            node = self.graph[current]
+            if node.parent is None:
+                break
+            current = node.parent.name
+
+        # path_set = all link names on the reversal path.
+        path_set: set[str] = set(path)
+
+        # Create fresh (disconnected) nodes for every link.
+        new_nodes: dict[str, Node] = {
+            name: Node(
+                name=name,
+                link=old_node.link,
+                arcs=[],
+                children=[],
+                parent=None,
+                parent_arc=None,
+            )
+            for name, old_node in self.graph.items()
+        }
+
+        # Copy all edges that are NOT on the reversal path.
+        for name, old_node in self.graph.items():
+            for joint, child_node in zip(old_node.arcs, old_node.children):
+                if child_node.name in path_set:
+                    continue  # these edges are re-wired below
+                new_nodes[name].children.append(new_nodes[child_node.name])
+                new_nodes[name].arcs.append(joint)
+                new_nodes[child_node.name].parent = new_nodes[name].link
+                new_nodes[child_node.name].parent_arc = joint
+
+        # Re-wire path edges in reverse direction using ReversedJoint wrappers.
+        for i in range(len(path) - 1):
+            # Original edge: parent=path[i+1], child=path[i]
+            orig_joint = self.graph[path[i]].parent_arc
+            rev_joint = ReversedJoint(orig_joint)
+            # New edge: parent=path[i], child=path[i+1]
+            new_nodes[path[i]].children.append(new_nodes[path[i + 1]])
+            new_nodes[path[i]].arcs.append(rev_joint)
+            new_nodes[path[i + 1]].parent = new_nodes[path[i]].link
+            new_nodes[path[i + 1]].parent_arc = rev_joint
+
+        return Tree(new_nodes, new_root)
 
     def print(self, root):
         """prints the tree

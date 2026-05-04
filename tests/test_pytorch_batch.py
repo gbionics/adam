@@ -10,7 +10,8 @@ from adam.pytorch import KinDynComputationsBatch
 @pytest.fixture(scope="module")
 def setup_test(tests_setup, device) -> KinDynComputationsBatch | RobotCfg | State:
     robot_cfg, state = tests_setup
-
+    if robot_cfg.root_link is not None:
+        pytest.skip("root link parametrization tested in numpy and casadi only")
     adam_kin_dyn = KinDynComputationsBatch(
         robot_cfg.model_path,
         robot_cfg.joints_name_list,

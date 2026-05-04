@@ -336,6 +336,28 @@ M = kinDyn.mass_matrix(w_H_b, q)
 com = kinDyn.CoM_position(w_H_b, q)
 ```
 
+### Configurable Floating Base
+
+By default adam uses the root link of the URDF as the floating base. You can choose any other link as the floating base at construction time or at runtime:
+
+```python
+from adam.numpy import KinDynComputations
+
+# Construction-time: use "l_ankle_2" as the floating base
+kinDyn = KinDynComputations(model_path, joints_name_list, root_link="l_ankle_2")
+
+# Runtime setter (rebuilds the kinematic tree)
+kinDyn.set_root_link("chest")
+```
+
+adam re-roots the kinematic tree internally by reversing the joints along the path from the new root to the original URDF root. All dynamics quantities (mass matrix, Jacobians, bias forces, …) are then consistent with the new floating base. Results match iDynTree's `setFloatingBase` API.
+
+> [!IMPORTANT]
+> **Joint serialization is independent of the floating base.** The order of joints in the `joints` vector is fixed by `joints_name_list` at construction time and never changes — only the *base state* inputs (`w_H_b` and base velocity) reflect the new floating base.
+
+> [!NOTE]
+> `root_link` must be a **link** name, not a frame name. Passing a frame name raises a `ValueError` listing valid link names. Frames remain valid as targets for forward kinematics and Jacobians.
+
 ### Inverse Kinematics
 
 ```python
@@ -370,6 +392,7 @@ print("Joint values:\n", q_sol)
 - **Kinematics**: Forward kinematics, Jacobians (frame and base)
 - **Dynamics**: Mass matrix, Coriolis/centrifugal forces and gravity, Articulated body algorithm
 - **Centroidal**: Centroidal momentum matrix and derivatives
+- **Configurable floating base**: Any link can be set as the floating base
 - **Differentiation**: Get gradients, Jacobians, and Hessians automatically
 - **Symbolic**: Build computation graphs with CasADi for optimization
 - **Batched**: Process multiple configurations in parallel with PyTorch
