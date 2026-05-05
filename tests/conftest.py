@@ -49,6 +49,7 @@ class RobotCfg:
     n_dof: int
     kin_dyn: idyntree.KinDynComputations
     idyn_function_values: IDynFunctionValues
+    root_link: str | None = None
 
 
 VELOCITY_REPRESENTATIONS = [
@@ -61,6 +62,9 @@ ROBOTS = [
     "iCubGenova04",
     "StickBot",
 ]
+
+# l_sole is a frame; l_ankle_2 is the actual link it is attached to.
+ROOT_LINKS = [None, "l_ankle_2"]
 
 
 def get_robot_model_path(robot_name: str) -> str:
@@ -76,13 +80,13 @@ def get_robot_model_path(robot_name: str) -> str:
     return model_path
 
 
-TEST_CONFIGURATIONS = list(product(VELOCITY_REPRESENTATIONS, ROBOTS))
+TEST_CONFIGURATIONS = list(product(VELOCITY_REPRESENTATIONS, ROBOTS, ROOT_LINKS))
 
 
 @pytest.fixture(scope="module", params=TEST_CONFIGURATIONS, ids=str)
 def tests_setup(request) -> RobotCfg | State:
 
-    velocity_representation, robot_name = request.param
+    velocity_representation, robot_name, root_link = request.param
 
     np.random.seed(42)
 
@@ -133,6 +137,11 @@ def tests_setup(request) -> RobotCfg | State:
         raise ValueError(f"Unknown velocity representation: {velocity_representation}")
     kin_dyn.setFrameVelocityRepresentation(idyn_representation)
 
+    if root_link is not None:
+        assert kin_dyn.setFloatingBase(
+            root_link
+        ), f"setFloatingBase({root_link!r}) failed"
+
     n_dof = len(joints_name_list)
     # base quantities
     xyz = (np.random.rand(3) - 0.5) * 5
@@ -167,6 +176,7 @@ def tests_setup(request) -> RobotCfg | State:
         n_dof=n_dof,
         kin_dyn=kin_dyn,
         idyn_function_values=idyn_function_values,
+        root_link=root_link,
     )
 
     yield robot_cfg, state

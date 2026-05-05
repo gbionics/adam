@@ -218,3 +218,8 @@ When computing system acceleration with external forces (e.g., contact forces), 
         external_wrenches=external_wrenches
     )
 
+.. seealso::
+
+    :doc:`floating_base` — how to change which link is treated as the
+    floating base.
+

@@ -10,6 +10,8 @@ from adam.model.conversions.idyntree import to_idyntree_model
 @pytest.fixture(scope="module")
 def setup_test(tests_setup) -> KinDynComputations | RobotCfg | State:
     robot_cfg, state = tests_setup
+    if robot_cfg.root_link is not None:
+        pytest.skip("root link parametrization tested in numpy and casadi only")
     adam_kin_dyn = KinDynComputations(robot_cfg.model_path, robot_cfg.joints_name_list)
     adam_kin_dyn.set_frame_velocity_representation(robot_cfg.velocity_representation)
     robot_cfg.kin_dyn.loadRobotModel(to_idyntree_model(adam_kin_dyn.rbdalgos.model))

@@ -13,8 +13,12 @@ config.update("jax_enable_x64", True)
 @pytest.fixture(scope="module")
 def setup_test(tests_setup) -> tuple[KinDynComputations, RobotCfg, State, int]:
     robot_cfg, state = tests_setup
-
-    adam_kin_dyn = KinDynComputations(robot_cfg.model_path, robot_cfg.joints_name_list)
+    if robot_cfg.root_link is not None:
+        pytest.skip("root link parametrization tested in numpy and casadi only")
+    adam_kin_dyn = KinDynComputations(
+        robot_cfg.model_path,
+        robot_cfg.joints_name_list,
+    )
     adam_kin_dyn.set_frame_velocity_representation(robot_cfg.velocity_representation)
 
     # Create a smaller batch for validation tests

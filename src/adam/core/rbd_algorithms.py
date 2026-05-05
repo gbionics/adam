@@ -1280,6 +1280,20 @@ class RBDAlgorithms:
                 converted.append(self.math.asarray(arg))
         return converted[0] if len(converted) == 1 else converted
 
+    def set_root_link(self, model: Model) -> None:
+        """Update the robot model to use a different root link.
+
+        Call this *after* rebuilding the model via
+        ``Model.build(factory, joints_name_list, root_link=new_root)``.
+
+        Args:
+            model (Model): pre-built model with the desired root link.
+        """
+        self.model = model
+        self.NDoF = model.NDoF
+        self.root_link = model.tree.root
+        self._prepare_tree_cache()
+
     def _prepare_tree_cache(self) -> None:
         """Pre-compute static tree data so the dynamic algorithms avoid repeated Python work."""
         nodes = list(self.model.tree)
@@ -1316,9 +1330,13 @@ class RBDAlgorithms:
                 self._joint_indices_per_node[idx] = joint.idx
                 if joint.idx is not None:
                     self._joint_index_to_node[int(joint.idx)] = idx
+                # Use parent_arc from the tree so reversed joints are handled correctly.
+                self._joint_by_child[link.name] = joint
 
+        # Add joints whose child is a frame (frames are not tree nodes).
         for joint in self.model.joints.values():
-            self._joint_by_child[joint.child] = joint
+            if joint.child in self.model.frames:
+                self._joint_by_child[joint.child] = joint
 
         self._root_index = self.model.tree.get_idx_from_name(self.root_link)
         self._node_count = node_count
