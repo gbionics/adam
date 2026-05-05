@@ -25,48 +25,47 @@ keywords = [
   "reinforcement-learning",
   "motion-planning",
 ]
+
 dependencies = [
   "numpy>=1.20",
   "scipy",
-  "casadi>=3.6",
   "prettytable",
   "urdfdom-py",
   "array-api-compat",
 ]
 
 [project.optional-dependencies]
-jax = ["jax<=0.6.0", "jaxlib"]
-casadi = ["casadi", "liecasadi"]
-pytorch = ["torch", "jax", "jaxlib"]
+jax = ["jax", "jaxlib"]
+casadi = ["casadi>=3.6", "liecasadi"]
+pytorch = ["torch"]
 mujoco = ["mujoco"]
 usd = ["usd-core"]
-test = [
-  "jax<=0.6.0",
-  "jaxlib",
-  "casadi",
-  "torch",
-  "urdf-usd-converter",
-  "mujoco",
-  "robot_descriptions",
-  "pytest",
-  "idyntree",
-  "icub-models",
-  "black",
-  "requests",
-  "liecasadi",
-]
 conversion = ["idyntree"]
-all = ["jax", "jaxlib", "casadi>=3.6", "torch"]
+all = [
+  "adam-robotics[jax,casadi,pytorch,mujoco,usd,conversion]",
+]
+test = [
+  "adam-robotics[jax,casadi,pytorch,mujoco,conversion]",
+  "pytest",
+  "requests",
+  "robot_descriptions",
+  "urdf-usd-converter",
+  "icub-models",
+]
+dev = [
+  "adam-robotics[test]",
+  "black",
+]
 
 [project.urls]
-"Documentation" = "https://adam-robotics.readthedocs.io/en/latest/"
-"Source" = "https://github.com/ami-iit/adam"
+Documentation = "https://adam-robotics.readthedocs.io/en/latest/"
+Source = "https://github.com/ami-iit/adam"
 
 [tool.setuptools_scm]
 local_scheme = "dirty-tag"
 
 [tool.setuptools]
-package-dir = { "" = "src" } # keeps the src/ layout
+package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
