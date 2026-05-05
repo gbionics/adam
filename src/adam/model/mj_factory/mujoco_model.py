@@ -1,13 +1,17 @@
 from dataclasses import dataclass
 from typing import Optional, TYPE_CHECKING
+import warnings
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 from adam.core.spatial_math import SpatialMath
 from adam.model.abc_factories import Limits, ModelFactory
+from adam.model.visuals import Visual
 from adam.model.std_factories.std_joint import StdJoint
 from adam.model.std_factories.std_link import StdLink
+
+from .mujoco_visual import MujocoVisualBuilder
 
 # Type checking only - doesn't execute at runtime
 if TYPE_CHECKING:
@@ -41,7 +45,7 @@ class MujocoInertial:
 class MujocoLink:
     name: str
     inertial: MujocoInertial
-    visuals: list
+    visuals: list[Visual]
     collisions: list
 
 
@@ -63,10 +67,14 @@ def _normalize_quaternion(quat: np.ndarray) -> np.ndarray:
     return quat / norm
 
 
-def _rotate_vector(quat: np.ndarray, vec: np.ndarray) -> np.ndarray:
-    """Rotate a vector using quaternion [w, x, y, z]."""
-    rot = R.from_quat(quat, scalar_first=True).as_matrix()
-    return rot @ vec
+def _quat_to_rpy(quat: np.ndarray) -> np.ndarray:
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="Gimbal lock detected.*",
+            category=UserWarning,
+        )
+        return R.from_quat(quat, scalar_first=True).as_euler("xyz")
 
 
 class MujocoModelFactory(ModelFactory):
@@ -78,6 +86,13 @@ class MujocoModelFactory(ModelFactory):
         self.mj_model = self._model_exists(mj_model)
         fallback_name = "mujoco_model"
         self.name = getattr(self.mj_model, "name", None) or fallback_name
+        self._visual_builder = MujocoVisualBuilder(
+            mujoco=self.mujoco,
+            mj_model=self.mj_model,
+            math=self.math,
+            normalize_quaternion=_normalize_quaternion,
+            quat_to_rpy=_quat_to_rpy,
+        )
 
         self._links = self._build_links()
         self._child_map = self._build_child_map()
@@ -135,16 +150,19 @@ class MujocoModelFactory(ModelFactory):
         )
         return MujocoInertial(mass=mass, inertia=inertia, origin=origin)
 
+    def _link_visuals(self, body_id: int) -> list[Visual]:
+        return self._visual_builder.link_visuals(body_id)
+
     def _build_links(self) -> list[StdLink]:
         links: list[StdLink] = []
         for body_id in range(1, self.mj_model.nbody):
             link = MujocoLink(
                 name=self._body_name(body_id),
                 inertial=self._link_inertial(body_id),
-                visuals=[],
+                visuals=self._link_visuals(body_id),
                 collisions=[],
             )
-            links.append(StdLink(link, self.math))
+            links.append(StdLink(link, self.math, visuals=link.visuals))
         return links
 
     def _build_child_map(self) -> dict[str, list[str]]:
@@ -166,7 +184,7 @@ class MujocoModelFactory(ModelFactory):
         if joint_id is not None:
             j_pos = np.array(self.mj_model.jnt_pos[joint_id], dtype=float)
             if np.linalg.norm(j_pos) > 0.0:
-                xyz = xyz + _rotate_vector(body_quat, j_pos)
+                xyz = xyz + R.from_quat(body_quat, scalar_first=True).apply(j_pos)
         rpy = R.from_quat(body_quat, scalar_first=True).as_euler("xyz")
         return MujocoOrigin(xyz=xyz, rpy=rpy)
 

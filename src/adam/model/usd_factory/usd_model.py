@@ -12,6 +12,9 @@ from adam.core.spatial_math import SpatialMath
 from adam.model.abc_factories import Limits, ModelFactory
 from adam.model.std_factories.std_joint import StdJoint
 from adam.model.std_factories.std_link import StdLink
+from adam.model.visuals import Visual
+
+from .usd_visual import USDVisualBuilder
 
 if TYPE_CHECKING:
     from pxr import Usd
@@ -44,7 +47,7 @@ class USDInertial:
 class USDLink:
     name: str
     inertial: USDInertial
-    visuals: list
+    visuals: list[Visual]
     collisions: list
 
 
@@ -59,9 +62,13 @@ class USDJoint:
     limit: Optional[Limits]
 
 
-def _quat_to_xyzw(q: Any) -> np.ndarray:
+def _quat_to_wxyz(q: Any) -> np.ndarray:
     imag = q.GetImaginary()
-    return np.array([imag[0], imag[1], imag[2], q.GetReal()], dtype=float)
+    return np.array([q.GetReal(), imag[0], imag[1], imag[2]], dtype=float)
+
+
+def _rotation_from_usd_quat(q: Any) -> R:
+    return R.from_quat(_quat_to_wxyz(q), scalar_first=True)
 
 
 def _vec3_to_np(v: Any) -> np.ndarray:
@@ -69,9 +76,9 @@ def _vec3_to_np(v: Any) -> np.ndarray:
 
 
 def _is_identity_quat(q: Any) -> bool:
-    quat_xyzw = _quat_to_xyzw(q)
-    return np.allclose(quat_xyzw, np.array([0.0, 0.0, 0.0, 1.0])) or np.allclose(
-        quat_xyzw, np.array([0.0, 0.0, 0.0, -1.0])
+    quat_wxyz = _quat_to_wxyz(q)
+    return np.allclose(quat_wxyz, np.array([1.0, 0.0, 0.0, 0.0])) or np.allclose(
+        quat_wxyz, np.array([-1.0, 0.0, 0.0, 0.0])
     )
 
 
@@ -89,6 +96,8 @@ class USDModelFactory(ModelFactory):
         self.stage = self._load_stage(usd_source)
         self.robot_prim = self._resolve_robot_prim(robot_prim_path)
         self.name = self.robot_prim.GetName() or "usd_robot"
+        self._xform_cache = self.UsdGeom.XformCache()
+        self._visual_builder: USDVisualBuilder | None = None
 
         self._links, self._path_to_link_name = self._build_links()
         self._joints = self._build_joints()
@@ -216,7 +225,7 @@ class USDModelFactory(ModelFactory):
         #   I_link = R^T @ diag(Ixx, Iyy, Izz) @ R
         #
         # where R = R.from_quat(principal_axes) maps link → principal frame.
-        R_principal = R.from_quat(_quat_to_xyzw(principal_axes))
+        R_principal = _rotation_from_usd_quat(principal_axes)
         R_mat = R_principal.as_matrix()
         I_diag = np.diag(diagonal_inertia)
         I_link = R_mat.T @ I_diag @ R_mat
@@ -234,28 +243,87 @@ class USDModelFactory(ModelFactory):
             origin=USDOrigin(xyz=center_of_mass, rpy=np.zeros(3)),
         )
 
+    def _link_visuals(self, link_prim: Any) -> list[Visual]:
+        if self._visual_builder is None:  # pragma: no cover - construction invariant
+            raise RuntimeError("USD visual builder was not initialized.")
+        return self._visual_builder.link_visuals(link_prim)
+
+    def _joint_connected_rigid_body_paths(
+        self,
+        seed_path: str,
+        candidate_paths: set[str],
+    ) -> set[str]:
+        connected_paths = {seed_path}
+        changed = True
+        while changed:
+            changed = False
+            for prim in self.stage.TraverseAll():
+                if not prim.IsA(self.UsdPhysics.Joint):
+                    continue
+                joint = self.UsdPhysics.Joint(prim)
+                body_paths = set()
+                body0_targets = joint.GetBody0Rel().GetTargets()
+                body1_targets = joint.GetBody1Rel().GetTargets()
+                if body0_targets:
+                    body0_path = str(body0_targets[0])
+                    if body0_path in candidate_paths:
+                        body_paths.add(body0_path)
+                if body1_targets:
+                    body1_path = str(body1_targets[0])
+                    if body1_path in candidate_paths:
+                        body_paths.add(body1_path)
+                if body_paths and body_paths & connected_paths:
+                    new_paths = body_paths - connected_paths
+                    if new_paths:
+                        connected_paths.update(new_paths)
+                        changed = True
+        return connected_paths
+
+    def _discover_rigid_body_prims(self) -> list[Any]:
+        robot_path = self.robot_prim.GetPath()
+        if not self.robot_prim.HasAPI(self.UsdPhysics.RigidBodyAPI):
+            selected_paths = {
+                str(prim.GetPath())
+                for prim in self.stage.TraverseAll()
+                if prim.HasAPI(self.UsdPhysics.RigidBodyAPI)
+                and prim.GetPath().HasPrefix(robot_path)
+            }
+        else:
+            # Some USD layouts apply ArticulationRootAPI to the root link prim
+            # itself, with the other rigid bodies as siblings under the parent
+            # Xform rather than descendants of the root link. We therefore
+            # broaden the candidate search one level up, then keep only the
+            # rigid bodies that are actually joint-connected to the seed link
+            # to avoid pulling in unrelated sibling articulations.
+            scope_path = robot_path.GetParentPath()
+            candidate_paths = {
+                str(prim.GetPath())
+                for prim in self.stage.TraverseAll()
+                if prim.HasAPI(self.UsdPhysics.RigidBodyAPI)
+                and (
+                    prim.GetPath() == robot_path or prim.GetPath().HasPrefix(scope_path)
+                )
+            }
+            selected_paths = self._joint_connected_rigid_body_paths(
+                seed_path=str(robot_path),
+                candidate_paths=candidate_paths,
+            )
+
+        return [
+            prim
+            for prim in self.stage.TraverseAll()
+            if prim.HasAPI(self.UsdPhysics.RigidBodyAPI)
+            and str(prim.GetPath()) in selected_paths
+        ]
+
     def _build_links(self) -> tuple[list[StdLink], dict[str, str]]:
         links: list[StdLink] = []
         path_to_link_name: dict[str, str] = {}
         names_seen: set[str] = set()
+        rigid_body_prims = self._discover_rigid_body_prims()
         robot_path = self.robot_prim.GetPath()
 
-        # Some USD files (e.g. those not produced by Newton) use a flat layout
-        # where the ArticulationRoot is applied to the root *link* prim itself,
-        # and all other link prims are siblings under the parent Xform rather
-        # than descendants.  In that case, broaden the search scope one level
-        # up so that sibling rigid bodies are collected as well.
-        if self.robot_prim.HasAPI(self.UsdPhysics.RigidBodyAPI):
-            search_path = robot_path.GetParentPath()
-        else:
-            search_path = robot_path
-
-        for prim in self.stage.TraverseAll():
-            if not prim.GetPath().HasPrefix(search_path):
-                continue
-            if not prim.HasAPI(self.UsdPhysics.RigidBodyAPI):
-                continue
-
+        for prim in rigid_body_prims:
             name = prim.GetName()
             if name in names_seen:
                 raise ValueError(
@@ -263,20 +331,30 @@ class USDModelFactory(ModelFactory):
                     "Use unique prim names inside the robot subtree."
                 )
             names_seen.add(name)
-
-            link = USDLink(
-                name=name,
-                inertial=self._mass_api_to_inertial(prim),
-                visuals=[],
-                collisions=[],
-            )
-            links.append(StdLink(link, self.math))
             path_to_link_name[str(prim.GetPath())] = name
 
-        if not links:
+        if not rigid_body_prims:
             raise ValueError(
-                f"No rigid bodies found under '{search_path}' in USD stage."
+                f"No rigid bodies found for robot root '{robot_path}' in USD stage."
             )
+
+        self._rigid_body_paths = tuple(prim.GetPath() for prim in rigid_body_prims)
+        self._visual_builder = USDVisualBuilder(
+            Usd=self.Usd,
+            UsdGeom=self.UsdGeom,
+            xform_cache=self._xform_cache,
+            math=self.math,
+            rigid_body_paths=self._rigid_body_paths,
+        )
+
+        for prim in rigid_body_prims:
+            link = USDLink(
+                name=prim.GetName(),
+                inertial=self._mass_api_to_inertial(prim),
+                visuals=self._link_visuals(prim),
+                collisions=[],
+            )
+            links.append(StdLink(link, self.math, visuals=link.visuals))
 
         return links, path_to_link_name
 
@@ -338,11 +416,8 @@ class USDModelFactory(ModelFactory):
         # When localPos1/localRot1 is identity this reduces to the parent frame.
         p0 = _vec3_to_np(pos0)
         p1 = _vec3_to_np(pos1)
-        q0_xyzw = _quat_to_xyzw(rot0)
-        q1_xyzw = _quat_to_xyzw(rot1)
-
-        R0 = R.from_quat(q0_xyzw)
-        R1 = R.from_quat(q1_xyzw)
+        R0 = _rotation_from_usd_quat(rot0)
+        R1 = _rotation_from_usd_quat(rot1)
 
         # Combined rotation: R0 * R1^{-1}
         R_combined = R0 * R1.inv()
@@ -400,8 +475,7 @@ class USDModelFactory(ModelFactory):
                 )
                 rot1 = joint.GetLocalRot1Attr().Get()
                 if rot1 is not None and not _is_identity_quat(rot1):
-                    q1_xyzw = _quat_to_xyzw(rot1)
-                    axis = R.from_quat(q1_xyzw).apply(axis_in_anchor)
+                    axis = _rotation_from_usd_quat(rot1).apply(axis_in_anchor)
                 else:
                     axis = axis_in_anchor
 
@@ -460,8 +534,7 @@ class USDModelFactory(ModelFactory):
                 local_transform = xformable.GetLocalTransformation()
                 translate = local_transform.ExtractTranslation()
                 rot_quat = local_transform.ExtractRotationQuat()
-                q_xyzw = _quat_to_xyzw(rot_quat)
-                R_frame = R.from_quat(q_xyzw)
+                R_frame = _rotation_from_usd_quat(rot_quat)
                 with _warn.catch_warnings():
                     _warn.filterwarnings(
                         "ignore",

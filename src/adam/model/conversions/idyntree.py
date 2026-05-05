@@ -5,6 +5,14 @@ import casadi as cs
 
 from adam.model.abc_factories import Joint, Link
 from adam.model.model import Model
+from adam.model.visuals import (
+    BoxVisualGeometry,
+    CylinderVisualGeometry,
+    EmbeddedMeshVisualGeometry,
+    MeshVisualGeometry,
+    SphereVisualGeometry,
+    Visual,
+)
 from adam.core.spatial_math import ArrayLike
 
 
@@ -48,7 +56,7 @@ def _to_scalar(x) -> float:
 
 
 def to_idyntree_solid_shape(
-    visual: urdf_parser_py.urdf.Visual,
+    visual: urdf_parser_py.urdf.Visual | Visual,
 ) -> idyntree.bindings.SolidShape:
     """
     Args:
@@ -64,38 +72,63 @@ def to_idyntree_solid_shape(
     visual_transform = idyntree.bindings.Transform()
     visual_transform.setRotation(visual_rotation)
     visual_transform.setPosition(visual_position)
-    material = idyntree.bindings.Material(visual.material.name)
-    if visual.material.color is not None:
+    material_name = (
+        visual.material.name
+        if hasattr(visual.material, "name") and visual.material is not None
+        else (getattr(visual, "name", None) or "visual")
+    )
+    material = idyntree.bindings.Material(material_name)
+    if (
+        visual.material is not None
+        and getattr(visual.material, "color", None) is not None
+    ):
         color = idyntree.bindings.Vector4()
         color[0] = visual.material.color.rgba[0]
         color[1] = visual.material.color.rgba[1]
         color[2] = visual.material.color.rgba[2]
         color[3] = visual.material.color.rgba[3]
         material.setColor(color)
-    if isinstance(visual.geometry, urdf_parser_py.urdf.Box):
+    if (
+        visual.material is not None
+        and hasattr(visual.material, "rgba")
+        and visual.material.rgba is not None
+    ):
+        color = idyntree.bindings.Vector4()
+        color[0] = visual.material.rgba[0]
+        color[1] = visual.material.rgba[1]
+        color[2] = visual.material.rgba[2]
+        color[3] = visual.material.rgba[3]
+        material.setColor(color)
+    if isinstance(visual.geometry, (urdf_parser_py.urdf.Box, BoxVisualGeometry)):
         output = idyntree.bindings.Box()
         output.setX(visual.geometry.size[0])
         output.setY(visual.geometry.size[1])
         output.setZ(visual.geometry.size[2])
         output.setLink_H_geometry(visual_transform)
         return output
-    if isinstance(visual.geometry, urdf_parser_py.urdf.Cylinder):
+    if isinstance(
+        visual.geometry, (urdf_parser_py.urdf.Cylinder, CylinderVisualGeometry)
+    ):
         output = idyntree.bindings.Cylinder()
         output.setRadius(visual.geometry.radius)
         output.setLength(visual.geometry.length)
         output.setLink_H_geometry(visual_transform)
         return output
-    if isinstance(visual.geometry, urdf_parser_py.urdf.Sphere):
+    if isinstance(visual.geometry, (urdf_parser_py.urdf.Sphere, SphereVisualGeometry)):
         output = idyntree.bindings.Sphere()
         output.setRadius(visual.geometry.radius)
         output.setLink_H_geometry(visual_transform)
         return output
-    if isinstance(visual.geometry, urdf_parser_py.urdf.Mesh):
+    if isinstance(visual.geometry, (urdf_parser_py.urdf.Mesh, MeshVisualGeometry)):
         output = idyntree.bindings.ExternalMesh()
         output.setFilename(visual.geometry.filename)
         output.setScale(visual.geometry.scale)
         output.setLink_H_geometry(visual_transform)
         return output
+    if isinstance(visual.geometry, EmbeddedMeshVisualGeometry):
+        raise NotImplementedError(
+            "Embedded mesh visuals are not supported by iDynTree conversion."
+        )
 
     raise NotImplementedError(
         f"The visual type {visual.geometry.__class__} is not supported"

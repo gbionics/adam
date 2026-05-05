@@ -9,6 +9,14 @@ from scipy.spatial.transform import Rotation as R
 from adam.core.spatial_math import ArrayLike
 from adam.model.model import Model
 from adam.model.std_factories.std_model import URDFModelFactory
+from adam.model.visuals import (
+    BoxVisualGeometry,
+    CylinderVisualGeometry,
+    EmbeddedMeshVisualGeometry,
+    MeshVisualGeometry,
+    SphereVisualGeometry,
+    Visual,
+)
 from adam.numpy.numpy_like import SpatialMath
 
 
@@ -71,6 +79,207 @@ def _inertia_to_principal_axes(I: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return eigvals, quat_wxyz
 
 
+def _visual_prim_name(
+    visual: Visual,
+    visual_index: int,
+    *,
+    used_names: set[str],
+    Tf: Any,
+) -> str:
+    base_name = visual.name if visual.name else f"visual_{visual_index}"
+    identifier = Tf.MakeValidIdentifier(base_name) or f"visual_{visual_index}"
+    candidate = identifier
+    suffix = 1
+    while candidate in used_names:
+        candidate = f"{identifier}_{suffix}"
+        suffix += 1
+    used_names.add(candidate)
+    return candidate
+
+
+def _set_visual_transform(
+    prim: Any,
+    *,
+    translation: np.ndarray,
+    quat_wxyz: np.ndarray,
+    scale: np.ndarray | None,
+    UsdGeom: Any,
+    Gf: Any,
+) -> None:
+    xformable = UsdGeom.Xformable(prim)
+    xformable.AddTranslateOp().Set(
+        Gf.Vec3d(
+            float(translation[0]),
+            float(translation[1]),
+            float(translation[2]),
+        )
+    )
+    xformable.AddOrientOp().Set(
+        Gf.Quatf(
+            float(quat_wxyz[0]),
+            float(quat_wxyz[1]),
+            float(quat_wxyz[2]),
+            float(quat_wxyz[3]),
+        )
+    )
+    if scale is not None:
+        scale = np.asarray(scale, dtype=float).reshape(-1)
+        if not np.allclose(scale, 1.0):
+            xformable.AddScaleOp().Set(
+                Gf.Vec3d(float(scale[0]), float(scale[1]), float(scale[2]))
+            )
+
+
+def _set_visual_material(
+    geom_prim: Any,
+    *,
+    rgba: tuple[float, float, float, float] | None,
+    UsdGeom: Any,
+    Gf: Any,
+) -> None:
+    if rgba is None:
+        return
+
+    r, g, b, a = rgba
+    geom_prim.CreateDisplayColorPrimvar(UsdGeom.Tokens.constant).Set(
+        [Gf.Vec3f(float(r), float(g), float(b))]
+    )
+    geom_prim.CreateDisplayOpacityPrimvar(UsdGeom.Tokens.constant).Set([float(a)])
+
+
+def _load_mesh_vertices_faces(mesh_filename: str) -> tuple[np.ndarray, np.ndarray]:
+    try:
+        import trimesh
+    except (
+        ImportError
+    ) as exc:  # pragma: no cover - exercised in environments without trimesh
+        raise ImportError(
+            "Mesh visual export requires the optional dependency 'trimesh'. "
+            "Install it with `pip install adam-robotics[usd]`."
+        ) from exc
+
+    mesh = trimesh.load(mesh_filename, force="mesh")
+    vertices = np.asarray(mesh.vertices, dtype=float)
+    faces = np.asarray(mesh.faces, dtype=np.int32)
+    if vertices.ndim != 2 or vertices.shape[1] != 3:
+        raise ValueError(
+            f"Mesh visual {mesh_filename!r} did not produce Nx3 vertices. "
+            f"Got shape {vertices.shape}."
+        )
+    if faces.ndim != 2 or faces.shape[1] != 3:
+        raise ValueError(
+            f"Mesh visual {mesh_filename!r} did not produce triangular faces. "
+            f"Got shape {faces.shape}."
+        )
+    return vertices, faces
+
+
+def _author_mesh_visual(
+    stage: Any,
+    visual_path: str,
+    *,
+    vertices: np.ndarray,
+    faces: np.ndarray,
+    UsdGeom: Any,
+    Gf: Any,
+) -> Any:
+    mesh = UsdGeom.Mesh.Define(stage, visual_path)
+    mesh.CreatePointsAttr(
+        [
+            Gf.Vec3f(float(vertex[0]), float(vertex[1]), float(vertex[2]))
+            for vertex in np.asarray(vertices, dtype=float)
+        ]
+    )
+    mesh.CreateFaceVertexCountsAttr([3] * len(faces))
+    mesh.CreateFaceVertexIndicesAttr(
+        [int(index) for index in np.asarray(faces, dtype=np.int64).reshape(-1)]
+    )
+    return mesh
+
+
+def _author_link_visuals(
+    stage: Any,
+    *,
+    link: Any,
+    link_path: str,
+    UsdGeom: Any,
+    Gf: Any,
+    Tf: Any,
+) -> None:
+    if not getattr(link, "visuals", None):
+        return
+
+    visuals_scope_path = f"{link_path}/visuals"
+    UsdGeom.Scope.Define(stage, visuals_scope_path)
+    used_names: set[str] = set()
+
+    for visual_index, visual in enumerate(link.visuals):
+        visual_name = _visual_prim_name(
+            visual,
+            visual_index,
+            used_names=used_names,
+            Tf=Tf,
+        )
+        visual_path = f"{visuals_scope_path}/{visual_name}"
+        translation = _to_numpy(visual.origin.xyz).reshape(-1)
+        rpy = _to_numpy(visual.origin.rpy).reshape(-1)
+        quat_wxyz = R.from_euler("xyz", rpy).as_quat(scalar_first=True)
+        scale = None
+
+        if isinstance(visual.geometry, BoxVisualGeometry):
+            geom = UsdGeom.Cube.Define(stage, visual_path)
+            geom.CreateSizeAttr(1.0)
+            scale = np.asarray(visual.geometry.size, dtype=float)
+        elif isinstance(visual.geometry, CylinderVisualGeometry):
+            geom = UsdGeom.Cylinder.Define(stage, visual_path)
+            geom.CreateRadiusAttr(float(visual.geometry.radius))
+            geom.CreateHeightAttr(float(visual.geometry.length))
+            geom.CreateAxisAttr(UsdGeom.Tokens.z)
+        elif isinstance(visual.geometry, SphereVisualGeometry):
+            geom = UsdGeom.Sphere.Define(stage, visual_path)
+            geom.CreateRadiusAttr(float(visual.geometry.radius))
+        elif isinstance(visual.geometry, MeshVisualGeometry):
+            vertices, faces = _load_mesh_vertices_faces(visual.geometry.filename)
+            geom = _author_mesh_visual(
+                stage,
+                visual_path,
+                vertices=vertices,
+                faces=faces,
+                UsdGeom=UsdGeom,
+                Gf=Gf,
+            )
+            scale = np.asarray(visual.geometry.scale, dtype=float)
+        elif isinstance(visual.geometry, EmbeddedMeshVisualGeometry):
+            geom = _author_mesh_visual(
+                stage,
+                visual_path,
+                vertices=np.asarray(visual.geometry.vertices, dtype=float),
+                faces=np.asarray(visual.geometry.faces, dtype=np.int64),
+                UsdGeom=UsdGeom,
+                Gf=Gf,
+            )
+        else:  # pragma: no cover - kept defensive for future geometry types
+            raise NotImplementedError(
+                "Unsupported visual geometry for USD conversion: "
+                f"{visual.geometry.__class__.__name__}"
+            )
+
+        _set_visual_transform(
+            geom.GetPrim(),
+            translation=translation,
+            quat_wxyz=quat_wxyz,
+            scale=scale,
+            UsdGeom=UsdGeom,
+            Gf=Gf,
+        )
+        _set_visual_material(
+            geom,
+            rgba=visual.material.rgba if visual.material is not None else None,
+            UsdGeom=UsdGeom,
+            Gf=Gf,
+        )
+
+
 def model_to_usd_stage(
     model: Model,
     *,
@@ -79,7 +288,7 @@ def model_to_usd_stage(
 ) -> Any:
     """Convert an ADAM model to an OpenUSD stage containing one articulation robot."""
     try:
-        from pxr import Gf, Sdf, Usd, UsdGeom, UsdPhysics
+        from pxr import Gf, Sdf, Tf, Usd, UsdGeom, UsdPhysics
     except ImportError as exc:  # pragma: no cover - optional dependency
         raise ImportError(
             "The 'pxr' (OpenUSD) package is required for USD conversion."
@@ -161,6 +370,14 @@ def model_to_usd_stage(
                 float(principal_quat[2]),
                 float(principal_quat[3]),
             )
+        )
+        _author_link_visuals(
+            stage,
+            link=link,
+            link_path=link_path,
+            UsdGeom=UsdGeom,
+            Gf=Gf,
+            Tf=Tf,
         )
 
     joints_scope_path = f"{robot_prim_path}/__joints__"

@@ -293,6 +293,27 @@ class RBDAlgorithms:
             joint_positions=joint_positions,
         ).root_to_target
 
+    def link_poses(
+        self, base_transform: npt.ArrayLike, joint_positions: npt.ArrayLike
+    ) -> dict[str, npt.ArrayLike]:
+        """Computes the forward kinematics for every link in one tree traversal.
+
+        Args:
+            base_transform (npt.ArrayLike): The homogenous transform from base to world frame
+            joint_positions (npt.ArrayLike): The joints position
+
+        Returns:
+            dict[str, npt.ArrayLike]: Root-to-link homogeneous transforms keyed by link name
+        """
+        base_transform, joint_positions = self._convert_to_arraylike(
+            base_transform, joint_positions
+        )
+        root_to_link = self._compute_tree_homogeneous_traversal(
+            base_transform=base_transform,
+            joint_positions=joint_positions,
+        )
+        return {self._node_names[idx]: root_to_link[idx] for idx in self._node_indices}
+
     def joints_jacobian(
         self, frame: str, joint_positions: npt.ArrayLike
     ) -> npt.ArrayLike:
@@ -1277,6 +1298,7 @@ class RBDAlgorithms:
         """Pre-compute static tree data so the dynamic algorithms avoid repeated Python work."""
         nodes = list(self.model.tree)
         node_count = len(nodes)
+        self._node_names = tuple(node.name for node in nodes)
         self._node_indices = tuple(range(node_count))
         self._rev_node_indices = tuple(reversed(self._node_indices))
         self._parent_indices = [-1] * node_count

@@ -8,6 +8,7 @@ import urdf_parser_py.urdf
 from adam.core.spatial_math import SpatialMath
 from adam.model import Link
 from adam.model.abc_factories import Inertia, Inertial, Pose
+from adam.model.std_factories.urdf_visual import normalize_urdf_visual
 
 
 class Geometry(Enum):
@@ -41,7 +42,7 @@ class ParametricLink(Link):
         self.length_multiplier = length_multiplier
         self.densities = densities
         self.original_visual = copy.deepcopy(link.visual)
-        self.visuals = [copy.deepcopy(link.visual)]
+        self.visuals = []
         self.geometry_type, self.visual_data = self.get_geometry(self.original_visual)
         original_volume, _ = self.compute_volume(length_multiplier=1.0)
         self.original_density = link.inertial.mass / original_volume
@@ -57,6 +58,7 @@ class ParametricLink(Link):
         self.inertial = Inertial(
             mass=self.mass, inertia=inertia_parametric, origin=origin
         )
+        self.collisions = copy.deepcopy(link.collisions)
         self.update_visuals()
 
     def get_principal_length(self):
@@ -193,14 +195,15 @@ class ParametricLink(Link):
             # convert to Pose to ensure ArrayLike semantics for math operations
             return Pose.build(origin.xyz, origin.rpy, self.math)
 
-        v_o = self.original_visual.origin.xyz[2]
+        xyz = copy.deepcopy(origin.xyz)
+        v_o = xyz[2]
         length = self.get_principal_length_parametric()
         if v_o < 0:
-            origin.xyz[2] = self.link_offset - length / 2
+            xyz[2] = self.link_offset - length / 2
         else:
-            origin.xyz[2] = length / 2 + self.link_offset
+            xyz[2] = length / 2 + self.link_offset
         # convert to Pose to ensure ArrayLike semantics for math operations
-        return Pose.build(origin.xyz, origin.rpy, self.math)
+        return Pose.build(xyz, origin.rpy, self.math)
 
     def compute_inertia_parametric(self):
         """
@@ -276,11 +279,17 @@ class ParametricLink(Link):
         )
 
     def update_visuals(self):
+        visual = copy.deepcopy(self.original_visual)
+        origin_z = self.inertial.origin.xyz[2]
+        if hasattr(origin_z, "array"):
+            origin_z = origin_z.array
+        origin_z = float(origin_z)
         if self.geometry_type == Geometry.BOX:
-            self.visuals[0].geometry.size = self.visual_data_new
-            self.visuals[0].origin.xyz[2] = self.inertial.origin.xyz[2]
+            visual.geometry.size = self.visual_data_new
+            visual.origin.xyz[2] = origin_z
         elif self.geometry_type == Geometry.CYLINDER:
-            self.visuals[0].geometry.length = self.visual_data_new[0]
-            self.visuals[0].origin.xyz[2] = self.inertial.origin.xyz[2]
+            visual.geometry.length = self.visual_data_new[0]
+            visual.origin.xyz[2] = origin_z
         elif self.geometry_type == Geometry.SPHERE:
-            self.visuals[0].geometry.radius = self.visual_data_new
+            visual.geometry.radius = self.visual_data_new
+        self.visuals = [normalize_urdf_visual(visual, math=self.math)]

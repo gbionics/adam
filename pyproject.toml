@@ -39,12 +39,15 @@ jax = ["jax<=0.6.0", "jaxlib"]
 casadi = ["casadi", "liecasadi"]
 pytorch = ["torch", "jax", "jaxlib"]
 mujoco = ["mujoco"]
-usd = ["usd-core"]
+usd = ["usd-core", "trimesh"]
+visualization = ["viser", "trimesh"]
 test = [
   "jax<=0.6.0",
   "jaxlib",
   "casadi",
   "torch",
+  "viser",
+  "trimesh",
   "urdf-usd-converter",
   "mujoco",
   "robot_descriptions",
@@ -56,11 +59,14 @@ test = [
   "liecasadi",
 ]
 conversion = ["idyntree"]
-all = ["jax", "jaxlib", "casadi>=3.6", "torch"]
+all = ["jax", "jaxlib", "casadi>=3.6", "torch", "viser", "trimesh"]
 
 [project.urls]
 "Documentation" = "https://adam-robotics.readthedocs.io/en/latest/"
 "Source" = "https://github.com/ami-iit/adam"
+
+[project.scripts]
+adam-model-view = "adam.visualization.cli:main"
 
 [tool.setuptools_scm]
 local_scheme = "dirty-tag"

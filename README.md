@@ -36,6 +36,9 @@ pip install adam-robotics[mujoco]
 # OpenUSD support
 pip install adam-robotics[usd]
 
+# Visualization support
+pip install adam-robotics[visualization]
+
 # All backends
 pip install adam-robotics[all]
 ```
@@ -64,7 +67,7 @@ conda create -n adamenv -c conda-forge adam-robotics-all
 ```bash
 git clone https://github.com/ami-iit/adam.git
 cd adam
-pip install .[jax]  # or [casadi], [pytorch], [mujoco], [usd], [all]
+pip install .[jax]  # or [casadi], [pytorch], [mujoco], [usd], [visualization], [all]
 ```
 
 ## 🚀 Quick Start
@@ -336,6 +339,91 @@ M = kinDyn.mass_matrix(w_H_b, q)
 com = kinDyn.CoM_position(w_H_b, q)
 ```
 
+### Visualization
+
+adam also provides a lightweight visualization layer based on [viser](https://viser.studio/).
+It works with the same normalized model API, so URDF, MuJoCo, and USD models can all be rendered through the same interface.
+
+For quick inspection from the terminal, use the bundled viewer command:
+
+```bash
+adam-model-view --urdf path/to/robot.urdf
+adam-model-view --mujoco path/to/model.xml
+adam-model-view --usd path/to/robot.usda --robot-prim-path /Robot
+```
+
+```python
+import numpy as np
+import icub_models
+from adam.numpy import KinDynComputations
+from adam.visualization import Visualizer
+
+kindyn = KinDynComputations.from_urdf(
+    icub_models.get_model_file("iCubGazeboV2_5")
+)
+
+visualizer = Visualizer(
+    world_axes=True,
+    ground=True,
+    camera_position=(2.5, -2.0, 1.5),
+    camera_look_at=(0.0, 0.0, 0.6),
+)
+
+robot = visualizer.add_model(kindyn, root_name="/icub")
+
+w_H_b = np.eye(4)
+w_H_b[2, 3] = 0.6
+q = np.zeros(kindyn.NDoF)
+robot.update(w_H_b, q)
+robot.add_joint_sliders(folder_name="iCub")
+```
+
+With other model sources, only the loader changes:
+
+```python
+# MuJoCo
+kindyn = KinDynComputations.from_mujoco_model(mj_model)
+
+# USD
+kindyn = KinDynComputations.from_usd("robot.usda", robot_prim_path="/Robot")
+```
+
+Batched visualization is available through the same `ModelHandle` API by passing
+`num_instances` to `add_model()`. The model is rendered with viser batched meshes,
+and each `update()` call accepts base transforms with shape `(B, 4, 4)` and joint
+positions with shape `(B, N)`:
+
+```python
+num_instances = 16
+robot = visualizer.add_model(
+    kindyn,
+    root_name="/g1_batch",
+    num_instances=num_instances,
+)
+
+w_H_b = np.repeat(np.eye(4)[None, :, :], num_instances, axis=0)
+q = np.zeros((num_instances, kindyn.NDoF))
+robot.update(w_H_b, q)
+```
+
+For a ready-to-run MuJoCo example with a batch of Unitree G1 robots:
+
+```bash
+python examples/visualization/visualize_g1_batch.py
+```
+
+The batched example animates `left_hip_pitch_joint` by default with a phase offset
+per instance. Frames and joint sliders are scalar-model conveniences and are not
+enabled for batched models.
+
+Examples are available in:
+
+- `examples/visualization/visualize_mujoco.py`
+- `examples/visualization/visualize_g1_batch.py`
+- `examples/visualization/visualize_usd.py`
+- `examples/visualization/visualize_multi_robot.py`
+- `examples/visualization/visualize_urdf.py`
+
 ### Configurable Floating Base
 
 By default adam uses the root link of the URDF as the floating base. You can choose any other link as the floating base at construction time or at runtime:
@@ -396,6 +484,7 @@ print("Joint values:\n", q_sol)
 - **Differentiation**: Get gradients, Jacobians, and Hessians automatically
 - **Symbolic**: Build computation graphs with CasADi for optimization
 - **Batched**: Process multiple configurations in parallel with PyTorch
+- **Visualization**: Render URDF, MuJoCo, and USD robot models with viser
 
 ## 📖 Documentation
 

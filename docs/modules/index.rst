@@ -15,4 +15,5 @@ This section contains the documentation for the different modules of the library
     numpy
     model
     model.conversions
+    visualization
     adam.parametric

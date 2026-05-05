@@ -1,9 +1,13 @@
 import abc
 import dataclasses
+from typing import TYPE_CHECKING
 
 import numpy.typing as npt
 
 from adam.core.spatial_math import SpatialMath
+
+if TYPE_CHECKING:
+    from adam.model.visuals import Visual
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -164,7 +168,7 @@ class Link(abc.ABC):
 
     math: SpatialMath
     name: str
-    visuals: list
+    visuals: list["Visual"]
     inertial: Inertial
     collisions: list
 

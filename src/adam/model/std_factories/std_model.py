@@ -8,6 +8,7 @@ from adam.core.spatial_math import SpatialMath
 from adam.model.abc_factories import ModelFactory
 from adam.model.std_factories.std_joint import StdJoint
 from adam.model.std_factories.std_link import StdLink
+from adam.model.std_factories.urdf_visual import normalize_urdf_visual
 
 
 def urdf_remove_sensors_tags(xml_string):
@@ -62,6 +63,7 @@ class URDFModelFactory(ModelFactory):
     # TODO: path can be either a path and an urdf-string, leaving path for back compatibility, to be changed to meaningfull name
     def __init__(self, path: str, math: SpatialMath):
         self.math = math
+        self.resource_roots = self._infer_resource_roots(path)
         xml_string = get_xml_string(path)
 
         # Read URDF, but before passing it to urdf_parser_py get rid of all sensor tags
@@ -77,6 +79,18 @@ class URDFModelFactory(ModelFactory):
             xml_string_without_sensors_tags
         )
         self.name = self.urdf_desc.name
+
+    @staticmethod
+    def _infer_resource_roots(path: str | pathlib.Path) -> tuple[pathlib.Path, ...]:
+        if isinstance(path, pathlib.Path):
+            resolved = path.resolve()
+            return tuple(resolved.parents)
+
+        if isinstance(path, str) and "<robot" not in path:
+            resolved = pathlib.Path(path).resolve()
+            return tuple(resolved.parents)
+
+        return ()
 
     def get_joints(self) -> list[StdJoint]:
         """
@@ -147,4 +161,10 @@ class URDFModelFactory(ModelFactory):
         Returns:
             StdLink: our link representation
         """
-        return StdLink(link, self.math)
+        visuals = [
+            normalize_urdf_visual(
+                visual, math=self.math, resource_roots=self.resource_roots
+            )
+            for visual in link.visuals
+        ]
+        return StdLink(link, self.math, visuals=visuals)
