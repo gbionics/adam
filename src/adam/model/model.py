@@ -49,6 +49,17 @@ class Model:
         links_list = factory.get_links()
         frames_list = factory.get_frames()
 
+        # a massless fixed-joint leaf is classified as a frame and
+        # excluded from the tree. If it's requested as root, promote it to a real link
+        # so it can be re-rooted onto.
+        # promote-on-demand instead of always keeping frames in the tree
+        if root_link is not None:
+            frame_names = {f.name for f in frames_list}
+            if root_link in frame_names:
+                promoted = next(f for f in frames_list if f.name == root_link)
+                frames_list = [f for f in frames_list if f.name != root_link]
+                links_list = links_list + [promoted]
+
         # if the joints_name_list is None, set it to the list of all the joints that are not fixed
         if joints_name_list is None:
             joints_name_list = [
