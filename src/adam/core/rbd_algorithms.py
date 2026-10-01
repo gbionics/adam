@@ -91,21 +91,16 @@ class RBDAlgorithms:
         else:
             zero_q = math.zeros_like(base_transform[..., 0, 0])
 
-        def tile_batch(arr):
-            if not batch_shape:
-                return arr
-            reps = batch_shape + (1,) * len(arr.shape)
-            return math.tile(arr, reps)
-
         Xup = [None] * node_count
         Phi = [None] * node_count
         Ic = [None] * node_count
 
+        # Static inertias/subspaces stay unbatched and broadcast; they are never mutated.
         for idx in node_indices:
-            Ic[idx] = tile_batch(inertias[idx])
+            Ic[idx] = inertias[idx]
             if idx == root_idx:
-                Xup[idx] = tile_batch(self._root_spatial_transform)
-                Phi[idx] = tile_batch(self._root_motion_subspace)
+                Xup[idx] = self._root_spatial_transform
+                Phi[idx] = self._root_motion_subspace
             else:
                 joint = joints[idx]
                 joint_idx = joint_indices[idx]
@@ -118,7 +113,7 @@ class RBDAlgorithms:
                     else self._root_spatial_transform
                 )
                 Xup[idx] = X_current
-                Phi[idx] = tile_batch(motion_subspaces[idx])
+                Phi[idx] = motion_subspaces[idx]
 
         Xup_T = [math.swapaxes(Xup[i], -2, -1) for i in range(node_count)]
         Ic_comp = Ic[:]
@@ -181,7 +176,7 @@ class RBDAlgorithms:
                 block = blocks[r][c]
                 if block is None:
                     block = math.factory.zeros(batch_shape + (sizes[r], sizes[c]))
-                row_blocks.append(block)
+                row_blocks.append(math.broadcast_batch(block, batch_shape))
             row_tensors.append(math.concatenate(row_blocks, axis=-1))
         M = math.concatenate(row_tensors, axis=-2)
 
@@ -977,24 +972,10 @@ class RBDAlgorithms:
         def eye6():
             return math.factory.eye(batch_shape + (6,))
 
-        def expand_to_match(vec, reference):
-            expanded = math.expand_dims(vec, axis=-1)
-            expanded_ndim = expanded.ndim
-            reference_ndim = reference.ndim
-            if expanded_ndim != reference_ndim:
-                expanded = math.expand_dims(expanded, axis=-1)
-            return expanded
-
         if n > 0:
             zero_q = math.zeros_like(joint_positions[..., 0])
         else:
             zero_q = math.zeros_like(base_velocity[..., 0])
-
-        def tile_batch(arr):
-            if not batch_shape:
-                return arr
-            reps = batch_shape + (1,) * len(arr.shape)
-            return math.tile(arr, reps)
 
         Xup = [None] * node_count
         Scols: list[ArrayLike | None] = [None] * node_count
@@ -1004,8 +985,9 @@ class RBDAlgorithms:
         pA = [None] * node_count
         g_acc = [None] * node_count
 
+        # Static inertias/subspaces are broadcast, not copied: IA entries are only rebound.
         for idx in node_indices:
-            IA[idx] = tile_batch(inertias[idx])
+            IA[idx] = inertias[idx]
 
             if idx == root_idx:
                 Xup[idx] = eye6()
@@ -1025,7 +1007,7 @@ class RBDAlgorithms:
                 g_acc[idx] = math.mxv(X_current, g_acc[parent])
 
                 if joint_idx is not None:
-                    Si = tile_batch(motion_subspaces[idx])
+                    Si = motion_subspaces[idx]
                     Scols[idx] = Si
                     qd_i = joint_velocities[..., joint_idx]
                     vJ = math.vxs(Si, qd_i)
@@ -1040,7 +1022,6 @@ class RBDAlgorithms:
                 math.spatial_skew_star(v[idx]), math.mxv(IA[idx], v[idx])
             )
 
-        d_list: list[ArrayLike | None] = [None] * node_count
         inv_d_list: list[ArrayLike | None] = [None] * node_count
         u_list: list[ArrayLike | None] = [None] * node_count
         U_list: list[ArrayLike | None] = [None] * node_count
@@ -1052,25 +1033,24 @@ class RBDAlgorithms:
             parent = parent_indices[idx]
             Xpt = math.swapaxes(Xup[idx], -2, -1)
             Si = Scols[idx]
-            if Scols[idx] is not None:
+            if Si is not None:
+                Si_T = math.swapaxes(Si, -2, -1)
                 U_i = math.mtimes(IA[idx], Si)
-                d_i = math.mtimes(math.swapaxes(Si, -2, -1), U_i)
+                # Joints are one-DoF, so d = S^T U is 1x1: use a reciprocal, not an inverse.
+                d = math.mtimes(Si_T, U_i)[..., 0, 0]
+                inv_d = math.ones_like(d) / d
                 joint_idx = joint_indices[idx]
                 tau_vec = joint_torques_eff[..., joint_idx]
-                Si_T_pA = math.mxv(math.swapaxes(Si, -2, -1), pA[idx])[..., 0]
-                u_i = tau_vec - Si_T_pA
+                u_i = tau_vec - math.mxv(Si_T, pA[idx])[..., 0]
 
-                d_list[idx] = d_i
                 u_list[idx] = u_i
                 U_list[idx] = U_i
-
-                inv_d = math.inv(d_i)
                 inv_d_list[idx] = inv_d
+
                 Ia = IA[idx] - math.mtimes(
-                    U_i, math.mtimes(inv_d, math.swapaxes(U_i, -2, -1))
+                    math.sxm(inv_d, U_i), math.swapaxes(U_i, -2, -1)
                 )
-                gain = math.mtimes(inv_d, expand_to_match(u_i, inv_d))
-                gain_vec = gain[..., 0]
+                gain_vec = (u_i * inv_d)[..., None]
                 pa = pA[idx] + math.mxv(Ia, c[idx]) + math.mxv(U_i, gain_vec)
             else:
                 Ia = IA[idx]
@@ -1080,7 +1060,8 @@ class RBDAlgorithms:
             pA[parent] = pA[parent] + math.mxv(Xpt, pa)
 
         rhs_root = base_ext_body - pA[root_idx] + math.mxv(IA[root_idx], a0_input)
-        a_base = math.solve(IA[root_idx], rhs_root)
+        # Without articulated children IA_root is still the unbatched static inertia.
+        a_base = math.solve(math.broadcast_batch(IA[root_idx], batch_shape), rhs_root)
 
         a = [None] * node_count
         a[root_idx] = a_base
@@ -1103,10 +1084,7 @@ class RBDAlgorithms:
                 U_i = U_list[idx]
                 U_T_rel_acc = math.mxv(math.swapaxes(U_i, -2, -1), rel_acc)[..., 0]
                 num = u_list[idx] - U_T_rel_acc
-                inv_d = inv_d_list[idx]
-                num_expanded = expand_to_match(num, inv_d)
-                gain_qdd = math.mtimes(inv_d, num_expanded)
-                qdd_col = gain_qdd[..., 0]
+                qdd_col = (num * inv_d_list[idx])[..., None]
                 if joint_idx < n:
                     qdd_entries[joint_idx] = qdd_col
                 a_correction_vec = math.mxv(Si, qdd_col)
@@ -1248,7 +1226,7 @@ class RBDAlgorithms:
 
         zero_col = self.math.factory.zeros(batch_size + (6, 1))
         cols = [zero_col if col is None else col for col in cols]
-        return self.math.concatenate(cols, axis=-1)
+        return self.math.concatenate_columns(cols)
 
     def _default_joint_value(
         self, joint_positions: npt.ArrayLike, fallback: npt.ArrayLike | None = None
