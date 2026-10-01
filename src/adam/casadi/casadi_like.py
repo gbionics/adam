@@ -182,6 +182,10 @@ class CasadiLikeFactory(ArrayLikeFactory):
         # No batching in CasADi: return input unchanged.
         return x
 
+    def broadcast_to(self, x: CasadiLike, shape: tuple) -> CasadiLike:
+        # No batching in CasADi: return input unchanged.
+        return x
+
 
 class SpatialMath(_SpatialMath):
     """CasADi backend for SpatialMath. Keeps the same high-level API."""
@@ -301,6 +305,11 @@ class SpatialMath(_SpatialMath):
     def tile(self, x: CasadiLike, reps: tuple) -> CasadiLike:
         # matching ArrayLike API (no-op for CasADi)
         return x
+
+    @staticmethod
+    def concatenate_columns(x: Sequence[CasadiLike]) -> CasadiLike:
+        # concatenate(axis=-1) would stack exactly two column blocks as one long vector
+        return CasadiLike(cs.horzcat(*[xi.array for xi in x]))
 
     def transpose(self, x: CasadiLike, dims: tuple) -> CasadiLike:
         # Only 2-D supported; any request means "swap last two"

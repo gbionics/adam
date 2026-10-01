@@ -1,4 +1,6 @@
 import abc
+
+import numpy as np
 import numpy.typing as npt
 
 
@@ -137,6 +139,18 @@ class ArrayLikeFactory(abc.ABC):
 
         Returns:
             npt.ArrayLike: tiled array
+        """
+        pass
+
+    @abc.abstractmethod
+    def broadcast_to(self, x: npt.ArrayLike, shape: tuple) -> npt.ArrayLike:
+        """
+        Args:
+            x (npt.ArrayLike): input array
+            shape (tuple): target shape
+
+        Returns:
+            npt.ArrayLike: read-only broadcast view (a no-op for 2-D-only backends)
         """
         pass
 
@@ -294,6 +308,17 @@ class SpatialMath:
         """
         return self.factory.tile(x, reps)
 
+    def broadcast_batch(self, x: npt.ArrayLike, batch_shape: tuple) -> npt.ArrayLike:
+        """Broadcast the leading dims of a ``(..., m, n)`` array to ``batch_shape``."""
+        batch_shape = tuple(batch_shape)
+        if tuple(x.shape[:-2]) == batch_shape:
+            return x
+        return self.factory.broadcast_to(x, batch_shape + tuple(x.shape[-2:]))
+
+    def concatenate_columns(self, x: list) -> npt.ArrayLike:
+        """Concatenate matrix blocks along the last axis (never as stacked vectors)."""
+        return self.concatenate(x, axis=-1)
+
     def sxm(self, s: npt.ArrayLike, m: npt.ArrayLike) -> npt.ArrayLike:
         """Computes scalar multiplication with a matrix
 
@@ -372,39 +397,22 @@ class SpatialMath:
         Returns:
             npt.ArrayLike: Homogeneous transform
         """
-        # Check if q is batched to determine if we need to handle batching
-        q_is_batched = q.ndim > 0 and q.shape != ()
+        return self.homogeneous(self._R_revolute(rpy, axis, q), xyz)
 
-        if q_is_batched:
-            # make all the joint properties batched
-            batch_size = q.shape[0]
-
-            # Ensure xyz is batched using standard numpy-style broadcasting
-            if xyz.ndim == 1:
-                xp = self._xp(xyz.array)
-                xyz_batched = xp.tile(xyz.array[None, :], (batch_size, 1))
-                xyz = self.factory.asarray(xyz_batched)
-
-            # Ensure rpy is batched
-            if rpy.ndim == 1:
-                xp = self._xp(rpy.array)
-                rpy_batched = xp.tile(rpy.array[None, :], (batch_size, 1))
-                rpy = self.factory.asarray(rpy_batched)
-
-            # Ensure axis is batched
-            if axis.ndim == 1:
-                xp = self._xp(axis.array)
-                axis_batched = xp.tile(axis.array[None, :], (batch_size, 1))
-                axis = self.factory.asarray(axis_batched)
-        R_rpy = self.R_from_RPY(rpy)
+    def _R_revolute(self, rpy, axis, q):
         R_axis = self.R_from_axis_angle(axis, q)
-        R = R_rpy @ R_axis
-        return self.homogeneous(R, xyz)
+        R_rpy = self.R_from_RPY(rpy)
+        # XLA compiles a batched-times-batched matmul faster than static-times-batched.
+        if R_rpy.ndim < R_axis.ndim:
+            R_rpy = self.broadcast_batch(R_rpy, R_axis.shape[:-2])
+        return R_rpy @ R_axis
 
     def homogeneous(self, R, p):
-        # Ensure p has the right shape for concatenation
-        if p.ndim == R.ndim - 1:
-            p = self.factory.asarray(p.array[..., None])  # Add last dimension
+        if p.shape[-1] != 1:  # (...,3) vector -> (...,3,1) column
+            p = p[..., None]
+        batch_shape = np.broadcast_shapes(tuple(R.shape[:-2]), tuple(p.shape[:-2]))
+        R = self.broadcast_batch(R, batch_shape)
+        p = self.broadcast_batch(p, batch_shape)
         top = self.concatenate([R, p], axis=-1)  # (...,3,4)
         zeros_row = self.factory.zeros_like(R[..., :1, :])  # (...,1,3)
         ones_col = self.factory.ones_like(R[..., :1, :1])  # (...,1,1)
@@ -429,7 +437,7 @@ class SpatialMath:
             npt.ArrayLike: Homogeneous transform
         """
         R = self.R_from_RPY(rpy)
-        p = xyz + q * axis
+        p = xyz + q[..., None] * axis
         return self.homogeneous(R, p)
 
     def H_from_Pos_RPY(self, xyz: npt.ArrayLike, rpy: npt.ArrayLike) -> npt.ArrayLike:
@@ -472,10 +480,9 @@ class SpatialMath:
             npt.ArrayLike: Spatial transform of a revolute joint given its rotation angle
         """
         # TODO: give Featherstone reference
-        T = self.H_revolute_joint(xyz, rpy, axis, q)
-        R = self.swapaxes(T[..., :3, :3], -1, -2)
-        p = self.mxv(-R, T[..., :3, 3])
-        return self.spatial_transform(R, p)
+        # Built from (R, xyz) directly: assembling the 4x4 H would broadcast the static xyz.
+        RT = self.swapaxes(self._R_revolute(rpy, axis, q), -1, -2)
+        return self.spatial_transform(RT, self.mxv(-RT, xyz))
 
     def X_prismatic_joint(
         self,
@@ -494,10 +501,7 @@ class SpatialMath:
         Returns:
             npt.ArrayLike: Spatial transform of a prismatic joint given its increment
         """
-        T = self.H_prismatic_joint(xyz, rpy, axis, q)
-        R = T[:3, :3].T
-        p = -T[:3, :3].T @ T[:3, 3]
-        return self.spatial_transform(R, p)
+        return self._X_from_H(self.H_prismatic_joint(xyz, rpy, axis, q))
 
     def X_fixed_joint(self, xyz: npt.ArrayLike, rpy: npt.ArrayLike) -> npt.ArrayLike:
         """
@@ -508,10 +512,7 @@ class SpatialMath:
         Returns:
             npt.ArrayLike: Spatial transform of a fixed joint
         """
-        T = self.H_from_Pos_RPY(xyz, rpy)
-        R = T[:3, :3].T
-        p = -T[:3, :3].T @ T[:3, 3]
-        return self.spatial_transform(R, p)
+        return self._X_from_H(self.H_from_Pos_RPY(xyz, rpy))
 
     def _X_from_H(self, T):
         R = self.swapaxes(T[..., :3, :3], -1, -2)

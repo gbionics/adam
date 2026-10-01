@@ -158,6 +158,9 @@ class ArrayAPIFactory(ArrayLikeFactory):
     def tile(self, x: ArrayAPILike, reps: tuple) -> ArrayAPILike:
         return self._like(self._xp.tile(x.array, reps))
 
+    def broadcast_to(self, x: ArrayAPILike, shape: tuple) -> ArrayAPILike:
+        return self._like(self._xp.broadcast_to(x.array, shape))
+
 
 class ArrayAPISpatialMath(SpatialMath):
     """A drop-in SpatialMath that implements sin/cos/outer/concat/skew with the Array API.
@@ -247,4 +250,8 @@ class ArrayAPISpatialMath(SpatialMath):
 
     def solve(self, A: ArrayAPILike, B: ArrayAPILike) -> ArrayAPILike:
         xp = self._xp(A.array, B.array)
-        return self.factory.asarray(xp.linalg.solve(A.array, B.array))
+        a, b = A.array, B.array
+        # A right-hand side with one dim fewer than A is a (batch of) vector(s).
+        if b.ndim == a.ndim - 1:
+            return self.factory.asarray(xp.linalg.solve(a, b[..., None])[..., 0])
+        return self.factory.asarray(xp.linalg.solve(a, b))
