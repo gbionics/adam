@@ -302,9 +302,7 @@ class KinDynComputationsParametric:
         self.rbdalgos = RBDAlgorithms(model=model, math=self.math)
         self.rbdalgos.set_frame_velocity_representation(self.representation)
         self.NDoF = self.rbdalgos.NDoF
-        return self.rbdalgos.CoM_position(
-            base_transform, joint_positions
-        ).array.squeeze()
+        return self.rbdalgos.CoM_position(base_transform, joint_positions).array
 
     def bias_force(
         self,
@@ -347,7 +345,7 @@ class KinDynComputationsParametric:
             base_velocity,
             joint_velocities,
             self.g,
-        ).array.squeeze()
+        ).array
 
     def coriolis_term(
         self,
@@ -391,7 +389,7 @@ class KinDynComputationsParametric:
             base_velocity,
             joint_velocities,
             torch.zeros(6),
-        ).array.squeeze()
+        ).array
 
     def gravity_term(
         self,
@@ -429,7 +427,7 @@ class KinDynComputationsParametric:
             torch.zeros(6),
             torch.zeros(self.NDoF),
             self.g,
-        ).array.squeeze()
+        ).array
 
     def get_total_mass(
         self, length_multiplier: torch.Tensor, densities: torch.Tensor

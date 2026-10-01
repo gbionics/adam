@@ -310,7 +310,7 @@ class KinDynComputationsParametric:
         self.NDoF = self.rbdalgos.NDoF
         return self.rbdalgos.rnea(
             base_transform, joint_positions, base_velocity, s_dot, self.g
-        ).array.squeeze()
+        ).array
 
     def coriolis_term(
         self,
@@ -353,7 +353,7 @@ class KinDynComputationsParametric:
             base_velocity,
             s_dot,
             np.zeros(6),
-        ).array.squeeze()
+        ).array
 
     def gravity_term(
         self,
@@ -392,7 +392,7 @@ class KinDynComputationsParametric:
             np.zeros(6),
             np.zeros(self.NDoF),
             self.g,
-        ).array.squeeze()
+        ).array
 
     def CoM_position(
         self,
@@ -424,9 +424,7 @@ class KinDynComputationsParametric:
         self.rbdalgos = RBDAlgorithms(model=model, math=self.math)
         self.rbdalgos.set_frame_velocity_representation(self.representation)
         self.NDoF = self.rbdalgos.NDoF
-        return self.rbdalgos.CoM_position(
-            base_transform, joint_positions
-        ).array.squeeze()
+        return self.rbdalgos.CoM_position(base_transform, joint_positions).array
 
     def get_total_mass(
         self, length_multiplier: jnp.array, densities: jnp.array

@@ -111,7 +111,7 @@ class KinDynComputations(KinDynFactoryMixin):
         """
         return self.rbdalgos.forward_kinematics(
             frame, base_transform, joint_positions
-        ).array.squeeze()
+        ).array
 
     def jacobian(
         self, frame: str, base_transform: np.ndarray, joint_positions: np.ndarray
@@ -126,9 +126,7 @@ class KinDynComputations(KinDynFactoryMixin):
         Returns:
             J_tot (np.ndarray): The Jacobian relative to the frame
         """
-        return self.rbdalgos.jacobian(
-            frame, base_transform, joint_positions
-        ).array.squeeze()
+        return self.rbdalgos.jacobian(frame, base_transform, joint_positions).array
 
     def relative_jacobian(self, frame: str, joint_positions: np.ndarray) -> np.ndarray:
         """Returns the Jacobian between the root link and a specified frame frames
@@ -164,7 +162,7 @@ class KinDynComputations(KinDynFactoryMixin):
         """
         return self.rbdalgos.jacobian_dot(
             frame, base_transform, joint_positions, base_velocity, joint_velocities
-        ).array.squeeze()
+        ).array
 
     def CoM_position(
         self, base_transform: np.ndarray, joint_positions: np.ndarray
@@ -178,9 +176,7 @@ class KinDynComputations(KinDynFactoryMixin):
         Returns:
             CoM (np.ndarray): The CoM position
         """
-        return self.rbdalgos.CoM_position(
-            base_transform, joint_positions
-        ).array.squeeze()
+        return self.rbdalgos.CoM_position(base_transform, joint_positions).array
 
     def CoM_jacobian(
         self, base_transform: np.ndarray, joint_positions: np.ndarray
@@ -194,9 +190,7 @@ class KinDynComputations(KinDynFactoryMixin):
         Returns:
             Jcom (np.ndarray): The CoM Jacobian
         """
-        return self.rbdalgos.CoM_jacobian(
-            base_transform, joint_positions
-        ).array.squeeze()
+        return self.rbdalgos.CoM_jacobian(base_transform, joint_positions).array
 
     def bias_force(
         self,
@@ -223,7 +217,7 @@ class KinDynComputations(KinDynFactoryMixin):
             base_velocity,
             joint_velocities,
             self.g,
-        ).array.squeeze()
+        ).array
 
     def coriolis_term(
         self,
@@ -251,7 +245,7 @@ class KinDynComputations(KinDynFactoryMixin):
             base_velocity,
             joint_velocities,
             np.zeros(6),
-        ).array.squeeze()
+        ).array
 
     def gravity_term(
         self, base_transform: np.ndarray, joint_positions: np.ndarray
@@ -272,7 +266,7 @@ class KinDynComputations(KinDynFactoryMixin):
             np.zeros(6),
             np.zeros(self.NDoF),
             self.g,
-        ).array.squeeze()
+        ).array
 
     def get_total_mass(self) -> float:
         """Returns the total mass of the robot
@@ -313,7 +307,7 @@ class KinDynComputations(KinDynFactoryMixin):
             joint_torques,
             self.g,
             external_wrenches,
-        ).array.squeeze()
+        ).array
 
     def link_poses(
         self, base_transform: np.ndarray, joint_positions: np.ndarray
@@ -327,7 +321,7 @@ class KinDynComputations(KinDynFactoryMixin):
             dict[str, np.ndarray]: A dictionary mapping link names to their poses as homogenous transformation matrices
         """
         return {
-            name: transform.array.squeeze()
+            name: transform.array
             for name, transform in self.rbdalgos.link_poses(
                 base_transform, joint_positions
             ).items()

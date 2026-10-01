@@ -205,7 +205,7 @@ class KinDynComputations(KinDynFactoryMixin):
         """
         return self.rbdalgos.rnea(
             base_transform, joint_positions, base_velocity, joint_velocities, self.g
-        ).array.squeeze()
+        ).array
 
     def coriolis_term(
         self,
@@ -232,7 +232,7 @@ class KinDynComputations(KinDynFactoryMixin):
             base_velocity,
             joint_velocities,
             np.zeros(6),
-        ).array.squeeze()
+        ).array
 
     def gravity_term(
         self, base_transform: jnp.array, joint_positions: jnp.array
@@ -253,7 +253,7 @@ class KinDynComputations(KinDynFactoryMixin):
             np.zeros(6),
             np.zeros(self.NDoF),
             self.g,
-        ).array.squeeze()
+        ).array
 
     def CoM_position(
         self, base_transform: jnp.array, joint_positions: jnp.array
@@ -267,9 +267,7 @@ class KinDynComputations(KinDynFactoryMixin):
         Returns:
             CoM (jnp.array): The CoM position
         """
-        return self.rbdalgos.CoM_position(
-            base_transform, joint_positions
-        ).array.squeeze()
+        return self.rbdalgos.CoM_position(base_transform, joint_positions).array
 
     def CoM_jacobian(
         self, base_transform: jnp.array, joint_positions: jnp.array
@@ -283,9 +281,7 @@ class KinDynComputations(KinDynFactoryMixin):
         Returns:
             Jcom (jnp.array): The CoM Jacobian
         """
-        return self.rbdalgos.CoM_jacobian(
-            base_transform, joint_positions
-        ).array.squeeze()
+        return self.rbdalgos.CoM_jacobian(base_transform, joint_positions).array
 
     def aba(
         self,
@@ -318,7 +314,7 @@ class KinDynComputations(KinDynFactoryMixin):
             joint_torques,
             self.g,
             external_wrenches,
-        ).array.squeeze()
+        ).array
 
     def get_total_mass(self) -> float:
         """Returns the total mass of the robot
