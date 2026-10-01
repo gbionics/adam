@@ -68,6 +68,35 @@ all = ["jax", "jaxlib", "casadi>=3.6", "torch", "viser", "trimesh"]
 [project.scripts]
 adam-model-view = "adam.visualization.cli:main"
 
+# Benchmark/test environments (uv only, not part of the published package):
+#   uv run --group bench-cpu python benchmarks/benchmark_dynamics.py ...
+#   uv run --group bench-gpu python benchmarks/benchmark_dynamics.py --device cuda ...
+#   uv run --group bench-gpu pytest tests/test_batched_api.py
+[dependency-groups]
+bench-cpu = ["torch", "jax", "icub-models", "pytest", "idyntree", "requests"]
+bench-gpu = ["torch", "jax[cuda13]", "icub-models", "pytest", "idyntree", "requests"]
+
+[tool.uv]
+conflicts = [[{ group = "bench-cpu" }, { group = "bench-gpu" }]]
+# urdf-usd-converter (test extra) only works with a tinyobjloader pre-release
+constraint-dependencies = ["tinyobjloader>=2.0.0rc13"]
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu", group = "bench-cpu" },
+  { index = "pytorch-cu130", group = "bench-gpu" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
 [tool.setuptools_scm]
 local_scheme = "dirty-tag"
 
